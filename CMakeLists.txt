@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
-project(FruitBoxServer LANGUAGES CXX)
 
+project(FruitBoxServer LANGUAGES C CXX)
 # Set C++ standard
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -14,24 +14,22 @@ if (LTO_SUPPORTED)
     set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
 endif()
 
-# Compiler warnings
-if (CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
-    add_compile_options(-Wall -Wextra -Werror -Wpedantic -Wconversion -Wsign-conversion -Wshadow)
-elseif (CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
-    add_compile_options(/W4 /WX)
-endif()
 
-# Source files
-file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS
-    src/*.cpp
-    src/*.h
+# Project sources only
+file(GLOB_RECURSE PROJECT_SOURCES CONFIGURE_DEPENDS
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/*.h
 )
 
-# Define executable
-add_executable(fruitbox_server ${SOURCES})
+foreach(file ${PROJECT_SOURCES})
+    message(STATUS "Found project source file: ${file}")
+endforeach()
 
-# Apply clang-tidy only to your own source files (cpp files)
-foreach(source_file ${SOURCES})
+# Define executable
+add_executable(fruitbox_server ${PROJECT_SOURCES})
+
+# Apply clang-tidy only to your project
+foreach(source_file ${PROJECT_SOURCES})
     if (source_file MATCHES "\\.cpp$")
         set_source_files_properties(${source_file} PROPERTIES
             CXX_CLANG_TIDY "clang-tidy;-checks=*;-header-filter=^/Users/gavinwang/code/fruitbox-multiplayer/.*"
@@ -51,8 +49,45 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(json)
 
-target_link_libraries(fruitbox_server PRIVATE nlohmann_json::nlohmann_json)
 
+target_compile_options(fruitbox_server PRIVATE
+    -Wall -Wextra -Werror -Wpedantic -Wconversion -Wsign-conversion -Wshadow
+)
+
+FetchContent_Declare(
+  uSockets_content
+  GIT_REPOSITORY https://github.com/uNetworking/uSockets
+  GIT_TAG v0.8.5
+  GIT_SHALLOW ON
+  GIT_SUBMODULES ""
+)
+FetchContent_MakeAvailable(uSockets_content)
+
+file(GLOB_RECURSE USOCKETS_SOURCES ${usockets_content_SOURCE_DIR}/src/*.c)
+add_library(uSockets ${USOCKETS_SOURCES})
+target_include_directories(uSockets
+    SYSTEM                                                    # <- mark as system
+    PUBLIC ${usockets_content_SOURCE_DIR}/src)
+target_compile_definitions(uSockets PRIVATE LIBUS_NO_SSL)
+
+FetchContent_Declare(
+  uWebSockets_content
+  GIT_REPOSITORY https://github.com/uNetworking/uWebSockets
+  GIT_TAG v20.37.0
+  GIT_SHALLOW ON
+  GIT_SUBMODULES ""
+)
+FetchContent_MakeAvailable(uWebSockets_content)
+find_package(ZLIB REQUIRED)
+add_library(uWebSockets INTERFACE)
+target_include_directories(uWebSockets
+    SYSTEM                                                    # <- mark as system
+    INTERFACE ${uwebsockets_content_SOURCE_DIR}/src)
+target_link_libraries(uWebSockets INTERFACE uSockets ${ZLIB_LIBRARIES})
+target_compile_options(uWebSockets INTERFACE -Wno-deprecated-declarations)
+
+target_link_libraries(fruitbox_server PRIVATE nlohmann_json::nlohmann_json)
+target_link_libraries(fruitbox_server PRIVATE uWebSockets)
 # Install target
 install(TARGETS fruitbox_server DESTINATION bin)
 

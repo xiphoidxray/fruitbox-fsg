@@ -30,4 +30,15 @@ void GameState::UpdatePlayerScore(const std::string &player_name,
 Player &GameState::GetOrAddPlayer(const std::string &player_name) {
   return players_[player_name];
 }
+
+[[nodiscard]] nlohmann::json GameState::SerializeCurrentRoundScores() const {
+  nlohmann::json result = nlohmann::json::object();
+
+  for (const auto &[player_name, player] : players_) {
+    result[player_name] = player.scores.back();
+  }
+
+  return result;
+}
+
 } // namespace fruitbox
