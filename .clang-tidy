@@ -1,6 +1,0 @@
----
-Checks: 'llvm-*,clang-analyzer-*,performance-*,bugprone-*,modernize-*,-modernize-use-trailing-return-type'
-WarningsAsErrors: '*'
-HeaderFilterRegex: '.*'
-FormatStyle: llvm
-...

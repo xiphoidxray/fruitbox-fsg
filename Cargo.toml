@@ -1,0 +1,16 @@
+[package]
+name = "fruitbox-multiplayer"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+axum = { version = "0.8.4", features = ["ws"] }
+tokio = { version = "1.36.0", features = ["full"] }
+serde = { version = "1.0.219", features = ["derive"] }
+serde_json = "1.0.107"
+tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
+futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
+tower-http = { version = "0.6.1", features = ["fs", "trace"] }
+axum-extra = { version="*", features = ["typed-header"] }
+tracing = "0.1"
+headers = "0.4"
