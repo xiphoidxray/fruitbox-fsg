@@ -15,23 +15,45 @@ export default function Chat({ chatMessages, sendChatMessage }: ChatProps) {
   }
 
   return (
-    <div className="chat-container" style={{ border: "1px solid #ccc", padding: "10px", maxHeight: "200px", overflowY: "auto" }}>
-      <div className="messages" style={{ marginBottom: "10px" }}>
+    <div
+      className="chat-container"
+      style={{
+        border: "1px solid #ccc",
+        padding: "10px",
+        width: "100%",
+        height: "300px", // Fixed height
+        display: "flex",
+        flexDirection: "column",
+      }}
+    >
+      <div
+        className="messages"
+        style={{
+          flex: 1,
+          overflowY: "auto",
+          marginBottom: "10px",
+        }}
+      >
         {chatMessages.map((msg, i) => (
           <div key={i}>
             <b>{msg.name}:</b> {msg.text}
           </div>
         ))}
       </div>
-      <input
-        type="text"
-        value={input}
-        onChange={e => setInput(e.target.value)}
-        onKeyDown={e => e.key === "Enter" && handleSend()}
-        placeholder="Type your message"
-        style={{ width: "80%" }}
-      />
-      <button onClick={handleSend} style={{ width: "18%" }}>Send</button>
+
+      <div style={{ display: "flex", gap: "4px" }}>
+        <input
+          type="text"
+          value={input}
+          onChange={e => setInput(e.target.value)}
+          onKeyDown={e => e.key === "Enter" && handleSend()}
+          placeholder="Type your message"
+          style={{ flex: 1 }}
+        />
+        <button onClick={handleSend} style={{ width: "80px" }}>
+          Send
+        </button>
+      </div>
     </div>
   );
 }
