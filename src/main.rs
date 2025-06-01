@@ -306,6 +306,11 @@ async fn handle_client_msg(
                     return;
                 }
 
+                // If a previous game is running, abort its timer so we can start fresh:
+                if let Some(handle) = room_state.timer_handle.take() {
+                    let _ = handle.abort();
+                }
+
                 // Generate a random board: e.g. 17×10 with values 1–9
                 let mut board: BoardData = Vec::new();
                 for _y in 0..ROWS {
@@ -407,7 +412,11 @@ async fn handle_client_msg(
             }
         }
 
-        WsClientMsg::ChatMessage { room_id, player_id: _, message } => {
+        WsClientMsg::ChatMessage {
+            room_id,
+            player_id: _,
+            message,
+        } => {
             let player_id = match my_player_id {
                 Some(pid) => pid.clone(),
                 None => {

@@ -55,6 +55,12 @@
   left: 50%;
   transform: translate(-50%, -50%);
   pointer-events: none;
+  color: #fff;
+  border-radius: 50%;
+  width: 80%;
+  height: 80%;
+  margin: auto;
+  transition: outline 0.1s;  
 }
 
 /* highlighted by the drag box */
