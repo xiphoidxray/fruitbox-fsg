@@ -31,7 +31,7 @@
   display: grid;
   grid-template-columns: repeat(17, 1fr);
   grid-template-rows: repeat(10, 1fr);
-  background: #a5d6a7; /* light green */
+  background: #b6e3b7; /* light green */
   border: 4px solid #388e3c; /* dark green */
   user-select: none;
 }

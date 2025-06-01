@@ -38,8 +38,8 @@ export default function Apple({
         src={imageSrc}
         alt={`Apple ${value}`}
         style={{
-          width: "110%",
-          height: "110%",
+          width: "115%",
+          height: "115%",
           objectFit: "contain",
           pointerEvents: "none",
         }}
