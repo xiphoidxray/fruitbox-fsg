@@ -1,47 +1,86 @@
+/* wrapper and general styles */
 .wrapper {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 1rem;
   text-align: center;
   font-family: system-ui, sans-serif;
 }
 
+.error {
+  color: crimson;
+  font-weight: bold;
+}
+
+/* lobby */
+.lobby {
+  margin-bottom: 1rem;
+}
+.lobby input {
+  width: 120px;
+  padding: 0.25rem;
+  margin-right: 0.5rem;
+}
+
+/* board */
 .board {
-  width: 640px;
-  aspect-ratio: calc(17 / 10);
+  position: relative;
+  width: 680px;
+  aspect-ratio: 17 / 10;
   margin: 1rem auto;
-  position: relative;                         /* allows absolute rect */
   display: grid;
   grid-template-columns: repeat(17, 1fr);
   grid-template-rows: repeat(10, 1fr);
-  background: #81c784;
-  border: 4px solid #388e3c;
+  background: #a5d6a7; /* light green */
+  border: 4px solid #388e3c; /* dark green */
   user-select: none;
 }
 
+/* the individual apple */
 .apple {
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: bold;
   color: #fff;
-  background: crimson;
+  background: #d32f2f; /* red */
   border-radius: 50%;
   width: 80%;
   height: 80%;
   margin: auto;
-  transition: outline 0.1s;
+  transition: outline 0.1s, visibility 0.2s;
 }
 
+/* highlighted by the drag box */
 .apple.selected {
   outline: 3px solid gold;
 }
 
+/* disappeared when cleared */
 .apple.cleared {
   visibility: hidden;
 }
 
+/* the translucent yellow drag rectangle */
 .drag-rect {
   position: absolute;
-  background: rgba(255, 215, 0, 0.25);
-  border: 3px solid gold;
+  background: rgba(255, 215, 0, 0.3);
+  border: 2px solid gold;
   pointer-events: none;
   z-index: 10;
+}
+
+/* leaderboard */
+.leaderboard {
+  margin: 1rem auto;
+  border-collapse: collapse;
+  width: 400px;
+}
+.leaderboard th,
+.leaderboard td {
+  border: 1px solid #999;
+  padding: 0.5rem 1rem;
+}
+.leaderboard tr.me {
+  background: #f0f4c3; /* highlight your own row */
 }
