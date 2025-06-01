@@ -38,17 +38,23 @@
 
 /* the individual apple */
 .apple {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: bold;
-  color: #fff;
-  background: #d32f2f; /* red */
-  border-radius: 50%;
-  width: 80%;
-  height: 80%;
-  margin: auto;
-  transition: outline 0.1s, visibility 0.2s;
+  color: white;
+  font-size: 1.2rem;
+  height: auto;
+  width: 90%;
+}
+
+.apple-value {
+  position: absolute;
+  top: 60%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
 }
 
 /* highlighted by the drag box */
