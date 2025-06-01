@@ -35,13 +35,14 @@ export function useGameSocket(displayName: string) {
   const [chatMessages, setChatMessages] = useState<
     { playerId: string; name: string; text: string }[]
   >([]);
+  const [top10Scores, setTop10Scores] = useState<{ name: string; score: number }[]>([]);
 
 
   useEffect(() => {
-  // src/gameSocket.ts
-const wsProtocol = window.location.protocol === "https:" ? "wss" : "ws";
-const wsUrl      = `${wsProtocol}://${window.location.host}/ws`;
-const ws = new WebSocket(wsUrl);
+    // src/gameSocket.ts
+    const wsProtocol = window.location.protocol === "https:" ? "wss" : "ws";
+    const wsUrl = `${wsProtocol}://${window.location.host}/ws`;
+    const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 
     ws.onopen = () => {
@@ -56,6 +57,7 @@ const ws = new WebSocket(wsUrl);
         console.error("Invalid server message", e);
         return;
       }
+      console.log("Received message:", msg);
 
       switch (msg.type) {
         case "RoomCreated": {
@@ -71,8 +73,8 @@ const ws = new WebSocket(wsUrl);
           setPlayers(msg.data.players);
           // Find “my” ID from the returned players list
           // Assuming displayName is unique in that room:
-        //   const me = msg.data.players.find((p) => p.name === displayName);
-        //   if (me) setMyId(me.player_id);
+          //   const me = msg.data.players.find((p) => p.name === displayName);
+          //   if (me) setMyId(me.player_id);
           break;
         }
 
@@ -86,7 +88,7 @@ const ws = new WebSocket(wsUrl);
           setTimer(Number(msg.data.duration_secs));
           // reset scores to zero:
           const resetScores: Record<string, number> = {};
-          msg.data.board.forEach((_v, _i) => {}); // no-op, just demonstration
+          msg.data.board.forEach((_v, _i) => { }); // no-op, just demonstration
           setScores(resetScores);
           break;
         }
@@ -105,12 +107,6 @@ const ws = new WebSocket(wsUrl);
           break;
         }
 
-        case "ChatMessage": {
-          const { player_id, name, text } = msg.data;
-          setChatMessages((prev) => [...prev, { playerId: player_id, name, text }]);
-          break;
-        }
-
         case "ChatBroadcast": {
           console.log("Got broadcast", msg.data);
 
@@ -124,6 +120,16 @@ const ws = new WebSocket(wsUrl);
 
         case "Error": {
           setError(msg.data.msg);
+          break;
+        }
+        case "Top10Scores": {
+          setTop10Scores(
+            msg.data.scores.map(([score, name]: [number, string]) => ({
+              name,
+              score,
+            }))
+          );
+          console.log("Top 10 scores updated:", msg.data.scores);
           break;
         }
       }
@@ -204,5 +210,6 @@ const ws = new WebSocket(wsUrl);
     reportScore,
     chatMessages,
     sendChatMessage,
+    top10Scores
   };
 }

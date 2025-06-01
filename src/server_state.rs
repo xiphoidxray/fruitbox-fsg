@@ -1,6 +1,9 @@
 // src/server_state.rs
 use crate::ws_messages::{BoardData, Player, PlayerId, RoomId, WsServerMsg};
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{BinaryHeap, HashMap},
+    sync::Arc,
+};
 use tokio::sync::{broadcast, Mutex};
 
 /// How long (in seconds) the game runs after StartGame.
@@ -45,12 +48,14 @@ impl RoomState {
 pub struct AppState {
     /// Mutex so we can add/remove rooms, modify players, etc.
     pub rooms: Arc<Mutex<HashMap<RoomId, RoomState>>>,
+    pub top_10: Arc<Mutex<BinaryHeap<(u32, String)>>>, // (score, player name)
 }
 
 impl AppState {
     pub fn new() -> Self {
         AppState {
             rooms: Arc::new(Mutex::new(HashMap::new())),
+            top_10: Arc::new(Mutex::new(BinaryHeap::new())),
         }
     }
 }

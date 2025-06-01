@@ -20,7 +20,7 @@ pub type PlayerId = String;
 
 /// Represents one connected player (UUID and chosen display name).
 #[derive(Serialize, Deserialize, TS, Debug, Clone)]
-#[ts(export, export_to = "../frontend/src/types/ws.d.ts")]
+#[ts(export, export_to = "../frontend/src/types/ws.ts")]
 pub struct Player {
     /// The server‐assigned unique ID (e.g. a UUID).
     pub player_id: PlayerId,
@@ -31,7 +31,7 @@ pub struct Player {
 /// All messages the **front end** can send to the server.
 #[derive(Serialize, Deserialize, TS, Debug, Clone)]
 #[serde(tag = "type", content = "data")]
-#[ts(export, export_to = "../frontend/src/types/ws.d.ts")]
+#[ts(export, export_to = "../frontend/src/types/ws.ts")]
 pub enum WsClientMsg {
     /// Client wants to create a new room. Sends their `Player` (name + a client‐generated `player_id` or `""`).
     CreateRoom { player: Player },
@@ -61,7 +61,7 @@ pub enum WsClientMsg {
 /// All messages the **server** can push back to every client in a room.
 #[derive(Serialize, Deserialize, TS, Debug, Clone)]
 #[serde(tag = "type", content = "data")]
-#[ts(export, export_to = "../frontend/src/types/ws.d.ts")]
+#[ts(export, export_to = "../frontend/src/types/ws.ts")]
 pub enum WsServerMsg {
     /// A new room was created. Server returns the `room_id` and the `Player` (with assigned `player_id`).
     RoomCreated { room_id: RoomId },
@@ -110,5 +110,10 @@ pub enum WsServerMsg {
     Error {
         room_id: Option<RoomId>,
         msg: String,
+    },
+
+    /// Sent to newly connected clients (before joining a room), showing the global top 10 scores.
+    Top10Scores {
+        scores: Vec<(u32, String)>, // (player_name, score)
     },
 }

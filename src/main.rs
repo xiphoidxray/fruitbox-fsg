@@ -128,6 +128,14 @@ async fn handle_connection(mut ws: WebSocket, state: AppState) {
     // so that we can forward updates to this socket.
     let mut room_rx_opt: Option<broadcast::Receiver<WsServerMsg>> = None;
 
+    let scores: Vec<_> = state.top_10.lock().await.clone().into_sorted_vec();
+    let top_10_msg = WsServerMsg::Top10Scores { scores };
+    let _ = ws
+        .send(Message::Text(
+            serde_json::to_string(&top_10_msg).unwrap().into(),
+        ))
+        .await;
+
     // Loop until the socket is closed
     loop {
         tokio::select! {
@@ -337,6 +345,8 @@ async fn handle_client_msg(
                 // Spawn a timer task that ticks every second (or ms) for GAME_DURATION_SECS
                 let tx_clone = room_state.tx.clone();
                 let room_clone = room_id.clone();
+                let top_10_arc = state.top_10.clone();
+                let rooms_clone = state.rooms.clone();
                 let handle = tokio::spawn(async move {
                     // let start_time = Instant::now();
                     for sec_left in (0..=GAME_DURATION_SECS).rev() {
@@ -346,6 +356,20 @@ async fn handle_client_msg(
                         };
                         let _ = tx_clone.send(tick);
                         tokio::time::sleep(Duration::from_secs(1)).await;
+                    }
+                    {
+                        let mut top_10 = top_10_arc.lock().await;
+                        let mut rooms = rooms_clone.lock().await;
+                        if let Some(room_state) = rooms.get_mut(&room_id) {
+                            for (pid, score) in room_state.scores.iter() {
+                                if let Some(player) = room_state.players.get(pid) {
+                                    top_10.push((*score, player.name.clone()));
+                                    if top_10.len() > 10 {
+                                        top_10.pop(); // maintain only top 10
+                                    }
+                                }
+                            }
+                        }
                     }
                     // When timer ends (sec_left hits 0 and we sleep one last second),
                     // we might want to broadcast a final LeaderboardUpdate or “game over.”

@@ -1,12 +1,12 @@
-import  { useState } from "react";
+import { useState } from "react";
 import { useGameSocket } from "./gameSocket";
 import Board from "./Board";
 import Leaderboard from "./Leaderboard";
 import Chat from "./Chat";
 
 export default function App() {
-  // Ask the user for a display name on page load
   const [name] = useState<string>(() => prompt("Enter your name")?.trim() || "anon");
+  const [joinInput, setJoinInput] = useState("");
 
   // Hook that manages WebSocket and game state
   const {
@@ -23,10 +23,8 @@ export default function App() {
     myId,
     chatMessages,
     sendChatMessage,
+    top10Scores, // new
   } = useGameSocket(name);
-
-  // Local state for “join room” input field:
-  const [joinInput, setJoinInput] = useState("");
 
   return (
     <div className="wrapper">
@@ -34,16 +32,44 @@ export default function App() {
       <p>Your name: <b>{name}</b></p>
 
       {!roomId ? (
-        <div className="lobby">
-          <button onClick={() => createRoom()}>Create Room</button>
-          <span> or join room </span>
-          <input
-            value={joinInput}
-            onChange={(e) => setJoinInput(e.target.value)}
-            placeholder="Room ID"
-          />
-          <button onClick={() => joinRoom(joinInput.trim())}>Join</button>
-        </div>
+        <>
+          {/* Top 10 leaderboard shown on home page */}
+          {top10Scores.length > 0 && (
+            <div style={{ margin: "1rem 0" }}>
+              <h2>🏆 Top 10 Global Scores</h2>
+              <table className="leaderboard">
+                <thead>
+                  <tr>
+                    <th>Rank</th>
+                    <th>Player</th>
+                    <th>Score</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {top10Scores.map((entry, index) => (
+                    <tr key={index}>
+                      <td>{index + 1}</td>
+                      <td>{entry.name}</td>
+                      <td>{entry.score}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Lobby */}
+          <div className="lobby">
+            <button onClick={() => createRoom()}>Create Room</button>
+            <span> or join room </span>
+            <input
+              value={joinInput}
+              onChange={(e) => setJoinInput(e.target.value)}
+              placeholder="Room ID"
+            />
+            <button onClick={() => joinRoom(joinInput.trim())}>Join</button>
+          </div>
+        </>
       ) : (
         <div>
           <div className="lobby">
