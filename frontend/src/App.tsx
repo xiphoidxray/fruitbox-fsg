@@ -2,6 +2,7 @@ import  { useState } from "react";
 import { useGameSocket } from "./gameSocket";
 import Board from "./Board";
 import Leaderboard from "./Leaderboard";
+import Chat from "./Chat";
 
 export default function App() {
   // Ask the user for a display name on page load
@@ -20,6 +21,8 @@ export default function App() {
     startGame,
     reportScore,
     myId,
+    chatMessages,
+    sendChatMessage,
   } = useGameSocket(name);
 
   // Local state for “join room” input field:
@@ -53,8 +56,10 @@ export default function App() {
 
       {error && <p className="error">Error: {error}</p>}
 
-      {board.length > 0 && (
-        <div>
+    {board.length > 0 && (
+      <div style={{ display: "flex", alignItems: "flex-start", gap: "1rem", marginTop: "1rem" }}>
+        {/* Left side: game board and leaderboard */}
+        <div style={{ flex: "1" }}>
           <p>Time Remaining: {timer} s</p>
           <Board
             board={board}
@@ -65,7 +70,19 @@ export default function App() {
           />
           <Leaderboard players={players} scores={scores} myId={myId} />
         </div>
-      )}
+
+        {/* Right side: chat box */}
+        {roomId && myId && (
+          <div style={{ width: "300px" }}>
+            <Chat
+              chatMessages={chatMessages}
+              sendChatMessage={sendChatMessage}
+            />
+          </div>
+        )}
+      </div>
+    )}
+
     </div>
   );
 }
