@@ -1,5 +1,6 @@
 import React from "react";
-import appleImage from "../apple.png"; // adjust path as needed
+import appleImage from "./apple.png"; // adjust path as needed
+import appleHighlightedImage from "./apple-highlighted.png"; // highlighted apple image
 import "./App.css";
 
 interface AppleProps {
@@ -24,14 +25,17 @@ export default function Apple({
     position: "relative",
   };
 
-  const className = `apple${selected ? " selected" : ""}${
+  const className = `apple${
     cleared ? " cleared" : ""
   }`;
+
+  // Choose the appropriate image based on selection
+  const imageSrc = selected ? appleHighlightedImage : appleImage;
 
   return (
     <div className={className} style={style}>
       <img
-        src={appleImage}
+        src={imageSrc}
         alt={`Apple ${value}`}
         style={{
           width: "100%",
