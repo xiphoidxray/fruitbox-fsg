@@ -27,92 +27,97 @@ export default function App() {
   } = useGameSocket(name);
 
   return (
-    <div className="wrapper">
-      <h1>🍏 Fruitbox Multiplayer</h1>
-      <p>Your name: <b>{name}</b></p>
+    <div className="center-container">
 
-      {!roomId ? (
-        <>
-          {/* Top 10 leaderboard shown on home page */}
-          {top10Scores.length > 0 && (
-            <div style={{ margin: "1rem 0" }}>
-              <h2>🏆 Top 10 Global Scores</h2>
-              <table className="leaderboard">
-                <thead>
-                  <tr>
-                    <th>Rank</th>
-                    <th>Player</th>
-                    <th>Score</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {top10Scores.map((entry, index) => (
-                    <tr key={index}>
-                      <td>{index + 1}</td>
-                      <td>{entry.name}</td>
-                      <td>{entry.score}</td>
+      <div className="wrapper">
+        {board.length == 0 && (
+          <h1>🍏 Fruitbox Multiplayer</h1>
+        )}
+        <p>Your name: <b>{name}</b></p>
+
+        {!roomId ? (
+          <>
+            {/* Top 10 leaderboard shown on home page */}
+            {top10Scores.length > 0 && (
+              <div style={{ margin: "1rem 0" }}>
+                <h2>🏆 Top 10 Global Scores</h2>
+                <table className="leaderboard">
+                  <thead>
+                    <tr>
+                      <th>Rank</th>
+                      <th>Player</th>
+                      <th>Score</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          {/* Lobby */}
-          <div className="lobby">
-            <button onClick={() => createRoom()}>Create Room</button>
-            <span> or join room </span>
-            <input
-              value={joinInput}
-              onChange={(e) => setJoinInput(e.target.value)}
-              placeholder="Room ID"
-            />
-            <button onClick={() => joinRoom(joinInput.trim())}>Join</button>
-          </div>
-        </>
-      ) : (
-        <div>
-          <div className="lobby">
-            <p>
-              <b>Room ID:</b> {roomId} &nbsp;|&nbsp; 
-              <b>Players:</b> {players.map((p) => p.name).join(", ")}
-            </p>
-            <button onClick={() => startGame()}>Start Game</button>
-          </div>
-
-          {/* Game and Chat side by side */}
-          <div style={{ display: "flex", alignItems: "flex-start", gap: "1rem", marginTop: "1rem", marginRight: "8.5rem" }}>
-            {/* Left side: Board + Leaderboard (only if game started) */}
-            <div style={{ flex: 1 }}>
-              {board.length > 0 && (
-                <>
-                  <p>Time Remaining: {timer} s</p>
-                  <Board
-                    board={board}
-                    onClear={(count) => reportScore(count)}
-                    disabled={timer === 0}
-                    rows={10}
-                    cols={17}
-                  />
-                  <Leaderboard players={players} scores={scores} myId={myId} />
-                </>
-              )}
-            </div>
-
-            {/* Right side: Chat always visible if in a room */}
-            {myId && (
-              <div style={{ width: "300px", marginTop: "57px" }}>
-                <Chat
-                  chatMessages={chatMessages}
-                  sendChatMessage={sendChatMessage}
-                />
+                  </thead>
+                  <tbody>
+                    {top10Scores.map((entry, index) => (
+                      <tr key={index}>
+                        <td>{index + 1}</td>
+                        <td>{entry.name}</td>
+                        <td>{entry.score}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             )}
-          </div>
-        </div>
-      )}
 
-      {error && <p className="error">Error: {error}</p>}
+            {/* Lobby */}
+            <div className="lobby">
+              <button onClick={() => createRoom()}>Create Room</button>
+              <span> or join room </span>
+              <input
+                value={joinInput}
+                onChange={(e) => setJoinInput(e.target.value)}
+                placeholder="Room ID"
+              />
+              <button onClick={() => joinRoom(joinInput.trim())}>Join</button>
+            </div>
+          </>
+        ) : (
+          <div>
+            <div className="lobby">
+              <p>
+                <b>Room ID:</b> {roomId} &nbsp;|&nbsp;
+                <b>Players:</b> {players.map((p) => p.name).join(", ")}
+              </p>
+              <button onClick={() => startGame()}>Start Game</button>
+            </div>
+
+            {/* Game and Chat side by side */}
+            <div style={{ display: "flex", alignItems: "flex-start", gap: "1rem", marginTop: "1rem", marginRight: "8.5rem" }}>
+              {/* Left side: Board + Leaderboard (only if game started) */}
+              <div style={{ flex: 1 }}>
+                {board.length > 0 && (
+                  <>
+                    <p>Time Remaining: {timer} s</p>
+                    <Board
+                      board={board}
+                      onClear={(count) => reportScore(count)}
+                      disabled={timer === 0}
+                      rows={10}
+                      cols={17}
+                    />
+                    <Leaderboard players={players} scores={scores} myId={myId} />
+                  </>
+                )}
+              </div>
+
+              {/* Right side: Chat always visible if in a room */}
+              {myId && (
+                <div style={{ width: "300px", marginTop: "57px" }}>
+                  <Chat
+                    chatMessages={chatMessages}
+                    sendChatMessage={sendChatMessage}
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {error && <p className="error">Error: {error}</p>}
+      </div>
     </div>
   );
 }

@@ -1,6 +1,5 @@
 /* wrapper and general styles */
 .wrapper {
-  max-width: 900px;
   margin: 0 auto;
   padding: 1rem;
   text-align: center;
@@ -95,4 +94,12 @@
 }
 .leaderboard tr.me {
   background: #f0f4c3; /* highlight your own row */
+}
+
+.center-container {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh; 
+  max-height: 100vh; 
+  min-width: 100vw;
 }
