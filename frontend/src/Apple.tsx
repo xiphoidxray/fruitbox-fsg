@@ -1,6 +1,6 @@
 import React from "react";
-import appleImage from "./apple.png"; // adjust path as needed
-import appleHighlightedImage from "./apple-highlighted.png"; // highlighted apple image
+import appleImage from "./applev2.png"; // adjust path as needed
+import appleHighlightedImage from "./applev2-highlighted.png"; // highlighted apple image
 import "./App.css";
 
 interface AppleProps {
@@ -38,8 +38,8 @@ export default function Apple({
         src={imageSrc}
         alt={`Apple ${value}`}
         style={{
-          width: "100%",
-          height: "100%",
+          width: "110%",
+          height: "110%",
           objectFit: "contain",
           pointerEvents: "none",
         }}
