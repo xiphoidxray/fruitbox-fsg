@@ -25,14 +25,14 @@
 /* board */
 .board {
   position: relative;
-  width: 680px;                  /* same as your “slow” version */
+  width: 680px;
   aspect-ratio: 17 / 10;
   margin: 1rem auto;
   display: grid;
   grid-template-columns: repeat(17, 1fr);
   grid-template-rows: repeat(10, 1fr);
-  background: #a5d6a7;           /* light green */
-  border: 4px solid #388e3c;     /* dark green */
+  background: #a5d6a7; /* light green */
+  border: 4px solid #388e3c; /* dark green */
   user-select: none;
 }
 
@@ -43,7 +43,7 @@
   justify-content: center;
   font-weight: bold;
   color: #fff;
-  background: #d32f2f;           /* red */
+  background: #d32f2f; /* red */
   border-radius: 50%;
   width: 80%;
   height: 80%;
@@ -58,7 +58,7 @@
 
 /* disappeared when cleared */
 .apple.cleared {
-  visibility: hidden;            /* hides instantly—no lag */
+  visibility: hidden;
 }
 
 /* the translucent yellow drag rectangle */
