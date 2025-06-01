@@ -75,7 +75,7 @@ export default function App() {
 
             {/* Right side: Chat always visible if in a room */}
             {myId && (
-              <div style={{ width: "300px" }}>
+              <div style={{ width: "300px", marginTop: "57px" }}>
                 <Chat
                   chatMessages={chatMessages}
                   sendChatMessage={sendChatMessage}
