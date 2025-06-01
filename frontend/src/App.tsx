@@ -1,7 +1,12 @@
-import { useState, useRef } from "react";
+import { useRef, useState } from "react";
 import Apple from "./Apple";
 import "./App.css";
 
+/* ---------- constants ---------- */
+const COLS = 17;
+const ROWS = 10;
+
+/* ---------- helpers ---------- */
 type AppleState = {
   x: number;
   y: number;
@@ -9,15 +14,11 @@ type AppleState = {
   cleared: boolean;
 };
 
-const COLS = 17;
-const ROWS = 10;
-
-/** Generate a fresh board of apples with values 1-9 */
 function genApples(): AppleState[] {
-  const apples: AppleState[] = [];
+  const out: AppleState[] = [];
   for (let y = 0; y < ROWS; y++) {
     for (let x = 0; x < COLS; x++) {
-      apples.push({
+      out.push({
         x,
         y,
         value: 1 + Math.floor(Math.random() * 9),
@@ -25,110 +26,130 @@ function genApples(): AppleState[] {
       });
     }
   }
-  return apples;
+  return out;
 }
 
+/* ---------- component ---------- */
 export default function App() {
   const [apples, setApples] = useState(() => genApples());
   const [score, setScore] = useState(0);
 
-  // drag state
-  const start = useRef<{ x: number; y: number } | null>(null);
-  const [rect, setRect] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
+  const boardRef = useRef<HTMLDivElement>(null);
 
-  /** Convert mouse px coords to grid cell indices */
-  const posToCell = (e: React.PointerEvent) => {
-    const board = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    const relX = e.clientX - board.left;
-    const relY = e.clientY - board.top;
-    return {
-      x: Math.floor(relX / (board.width / COLS)),
-      y: Math.floor(relY / (board.height / ROWS)),
-    };
+  /** live drag rectangle in *pixels* relative to board top-left */
+  const [rectPx, setRectPx] =
+    useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
+
+  /** drag bookkeeping */
+  const startPx = useRef<{ x: number; y: number } | null>(null);
+  const dragging = useRef(false);
+
+  /* convert absolute mouse event to board-relative pixels */
+  const relPos = (e: React.PointerEvent) => {
+    const box = boardRef.current!.getBoundingClientRect();
+    return { x: e.clientX - box.left, y: e.clientY - box.top };
   };
 
-  /** Begin drag */
+  /* pointer handlers */
   const onPointerDown = (e: React.PointerEvent) => {
     if (e.button !== 0) return;
-    const cell = posToCell(e);
-    start.current = cell;
-    setRect({ x1: cell.x, y1: cell.y, x2: cell.x, y2: cell.y });
+    const p = relPos(e);
+    startPx.current = p;
+    dragging.current = true;
+    setRectPx({ x1: p.x, y1: p.y, x2: p.x, y2: p.y });
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
   };
 
-  /** Update drag rectangle */
   const onPointerMove = (e: React.PointerEvent) => {
-    if (!start.current) return;
-    const cell = posToCell(e);
-    setRect({
-      x1: Math.min(start.current.x, cell.x),
-      y1: Math.min(start.current.y, cell.y),
-      x2: Math.max(start.current.x, cell.x),
-      y2: Math.max(start.current.y, cell.y),
+    if (!dragging.current || !startPx.current) return;
+    const p = relPos(e);
+    setRectPx({
+      x1: Math.min(startPx.current.x, p.x),
+      y1: Math.min(startPx.current.y, p.y),
+      x2: Math.max(startPx.current.x, p.x),
+      y2: Math.max(startPx.current.y, p.y),
     });
   };
 
-  /** End drag – compute sum & maybe clear */
   const onPointerUp = () => {
-    if (!rect) return;
-    const sel = (a: AppleState) =>
-      !a.cleared &&
-      a.x >= rect.x1 &&
-      a.x <= rect.x2 &&
-      a.y >= rect.y1 &&
-      a.y <= rect.y2;
+    if (!rectPx || !boardRef.current) return;
+    dragging.current = false;
 
-    const sum = apples.filter(sel).reduce((acc, a) => acc + a.value, 0);
+    const { width, height } = boardRef.current.getBoundingClientRect();
+    const cellW = width / COLS;
+    const cellH = height / ROWS;
 
-    if (sum === 10) {
+    const inside = (a: AppleState) => {
+      if (a.cleared) return false;
+      const cx = (a.x + 0.5) * cellW;
+      const cy = (a.y + 0.5) * cellH;
+      return cx >= rectPx.x1 && cx <= rectPx.x2 && cy >= rectPx.y1 && cy <= rectPx.y2;
+    };
+
+    const picked = apples.filter(inside);
+    const sum = picked.reduce((acc, a) => acc + a.value, 0);
+
+    if (sum === 10 && picked.length) {
       setApples((prev) =>
-        prev.map((a) => (sel(a) ? { ...a, cleared: true } : a))
+        prev.map((a) => (inside(a) ? { ...a, cleared: true } : a)),
       );
-      setScore((s) => s + apples.filter(sel).length);
+      setScore((s) => s + picked.length);
     }
 
-    // reset drag overlay
-    start.current = null;
-    setRect(null);
+    // brief flash so user sees result
+    setTimeout(() => setRectPx(null), 20);
   };
 
+  /* ---------- ui ---------- */
   return (
     <div className="wrapper">
       <h1>🍏 Sum-to-10 Game</h1>
       <p>Score: {score}</p>
 
       <div
+        ref={boardRef}
         className="board"
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
       >
-        {apples.map((a, i) => (
-          <Apple
-            key={i}
-            {...a}
-            selected={
-              !!rect &&
-              !a.cleared &&
-              a.x >= rect.x1 &&
-              a.x <= rect.x2 &&
-              a.y >= rect.y1 &&
-              a.y <= rect.y2
-            }
-          />
-        ))}
-        {rect && (
+        {apples.map((a, i) => {
+          let selected = false;
+          if (rectPx && boardRef.current && !a.cleared) {
+            const { width, height } = boardRef.current.getBoundingClientRect();
+            const cw = width / COLS;
+            const ch = height / ROWS;
+            const cx = (a.x + 0.5) * cw;
+            const cy = (a.y + 0.5) * ch;
+            selected =
+              cx >= rectPx.x1 &&
+              cx <= rectPx.x2 &&
+              cy >= rectPx.y1 &&
+              cy <= rectPx.y2;
+          }
+          return <Apple key={i} {...a} selected={selected} />;
+        })}
+
+        {rectPx && (
           <div
             className="drag-rect"
             style={{
-              gridColumn: `${rect.x1 + 1} / ${rect.x2 + 2}`,
-              gridRow: `${rect.y1 + 1} / ${rect.y2 + 2}`,
+              left: rectPx.x1,
+              top: rectPx.y1,
+              width: rectPx.x2 - rectPx.x1,
+              height: rectPx.y2 - rectPx.y1,
             }}
           />
         )}
       </div>
 
-      <button onClick={() => { setApples(genApples()); setScore(0); }}>
+      <button
+        onClick={() => {
+          setApples(genApples());
+          setScore(0);
+          setRectPx(null);
+        }}
+      >
         Reset
       </button>
     </div>
