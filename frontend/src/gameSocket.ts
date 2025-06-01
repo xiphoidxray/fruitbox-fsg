@@ -32,6 +32,10 @@ export function useGameSocket(displayName: string) {
   const [timer, setTimer] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [myId] = useState<string>(() => crypto.randomUUID());
+  const [chatMessages, setChatMessages] = useState<
+    { playerId: string; name: string; text: string }[]
+  >([]);
+
 
   useEffect(() => {
   // src/gameSocket.ts
@@ -101,6 +105,23 @@ const ws = new WebSocket(wsUrl);
           break;
         }
 
+        case "ChatMessage": {
+          const { player_id, name, text } = msg.data;
+          setChatMessages((prev) => [...prev, { playerId: player_id, name, text }]);
+          break;
+        }
+
+        case "ChatBroadcast": {
+          console.log("Got broadcast", msg.data);
+
+          const { player, message } = msg.data;
+          setChatMessages((prev) => [
+            ...prev,
+            { playerId: player.player_id, name: player.name, text: message },
+          ]);
+          break;
+        }
+
         case "Error": {
           setError(msg.data.msg);
           break;
@@ -156,6 +177,19 @@ const ws = new WebSocket(wsUrl);
     wsRef.current.send(JSON.stringify(m));
   }
 
+  function sendChatMessage(text: string) {
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN || !roomId) return;
+    const m: WsClientMsg = {
+      type: "ChatMessage",
+      data: {
+        room_id: roomId,
+        player_id: myId,
+        message: text,
+      },
+    };
+    wsRef.current.send(JSON.stringify(m));
+  }
+
   return {
     roomId,
     players,
@@ -168,5 +202,7 @@ const ws = new WebSocket(wsUrl);
     joinRoom,
     startGame,
     reportScore,
+    chatMessages,
+    sendChatMessage,
   };
 }

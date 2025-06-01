@@ -16,9 +16,21 @@ name: string, };
 /**
  * All messages the **front end** can send to the server.
  */
-export type WsClientMsg = { "type": "CreateRoom", "data": { player: Player, } } | { "type": "JoinRoom", "data": { room_id: string, player: Player, } } | { "type": "StartGame", "data": { room_id: string, } } | { "type": "ScoreUpdate", "data": { room_id: string, player_id: string, cleared_count: number, } };
+export type WsClientMsg = { "type": "CreateRoom", "data": { player: Player, } } 
+    | { "type": "JoinRoom", "data": { room_id: string, player: Player, } } 
+    | { "type": "StartGame", "data": { room_id: string, } } 
+    | { "type": "ScoreUpdate", "data": { room_id: string, player_id: string, cleared_count: number, } }
+    | { "type": "ChatMessage"; "data": { room_id: string; player_id: string; message: string } };
 
 /**
  * All messages the **server** can push back to every client in a room.
  */
-export type WsServerMsg = { "type": "RoomCreated", "data": { room_id: string, } } | { "type": "JoinedRoom", "data": { room_id: string, players: Array<Player>, } } | { "type": "RoomPlayersUpdate", "data": { room_id: string, players: Array<Player>, } } | { "type": "GameStarted", "data": { room_id: string, board: Array<number>, duration_secs: bigint, } } | { "type": "TimerTick", "data": { room_id: string, remaining_secs: bigint, } } | { "type": "LeaderboardUpdate", "data": { room_id: string, scores: Array<[string, number]>, } } | { "type": "Error", "data": { room_id: string | null, msg: string, } };
+export type WsServerMsg = { "type": "RoomCreated", "data": { room_id: string, } } 
+    | { "type": "JoinedRoom", "data": { room_id: string, players: Array<Player>, } } 
+    | { "type": "RoomPlayersUpdate", "data": { room_id: string, players: Array<Player>, } } 
+    | { "type": "GameStarted", "data": { room_id: string, board: Array<number>, duration_secs: bigint, } } 
+    | { "type": "TimerTick", "data": { room_id: string, remaining_secs: bigint, } } 
+    | { "type": "LeaderboardUpdate", "data": { room_id: string, scores: Array<[string, number]>, } } 
+    | { "type": "Error", "data": { room_id: string | null, msg: string, } }
+    | { "type": "ChatMessage"; "data": { room_id: string; player_id: string; name: string; text: string } }
+    | { type: "ChatBroadcast"; data: { room_id: string; player: Player; message: string } };

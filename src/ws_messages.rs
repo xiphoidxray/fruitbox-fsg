@@ -49,6 +49,13 @@ pub enum WsClientMsg {
         player_id: PlayerId,
         cleared_count: u32,
     },
+
+    /// Player sends a chat message to everyone in the room.
+    ChatMessage {
+        room_id: RoomId,
+        player_id: PlayerId,
+        message: String,
+    },
 }
 
 /// All messages the **server** can push back to every client in a room.
@@ -90,6 +97,13 @@ pub enum WsServerMsg {
     LeaderboardUpdate {
         room_id: RoomId,
         scores: Vec<(PlayerId, u32)>,
+    },
+
+    /// Server broadcasts a chat message to all players in the room.
+    ChatBroadcast {
+        room_id: RoomId,
+        player: Player,
+        message: String,
     },
 
     /// Used to notify of any error: invalid room, not owner, etc.

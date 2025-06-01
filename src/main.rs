@@ -406,6 +406,50 @@ async fn handle_client_msg(
                     .await;
             }
         }
+
+        WsClientMsg::ChatMessage { room_id, player_id: _, message } => {
+            let player_id = match my_player_id {
+                Some(pid) => pid.clone(),
+                None => {
+                    let err = WsServerMsg::Error {
+                        room_id: Some(room_id.clone()),
+                        msg: "Player not identified".to_string(),
+                    };
+                    let _ = ws
+                        .send(Message::Text(serde_json::to_string(&err).unwrap().into()))
+                        .await;
+                    return;
+                }
+            };
+
+            let mut rooms = state.rooms.lock().await;
+            if let Some(room_state) = rooms.get_mut(&room_id) {
+                if let Some(player) = room_state.players.get(&player_id) {
+                    let chat_msg = WsServerMsg::ChatBroadcast {
+                        room_id: room_id.clone(),
+                        player: player.clone(),
+                        message: message.clone(),
+                    };
+                    let _ = room_state.tx.send(chat_msg);
+                } else {
+                    let err = WsServerMsg::Error {
+                        room_id: Some(room_id.clone()),
+                        msg: "You are not a player in this room".to_string(),
+                    };
+                    let _ = ws
+                        .send(Message::Text(serde_json::to_string(&err).unwrap().into()))
+                        .await;
+                }
+            } else {
+                let err = WsServerMsg::Error {
+                    room_id: Some(room_id.clone()),
+                    msg: "Room not found".to_string(),
+                };
+                let _ = ws
+                    .send(Message::Text(serde_json::to_string(&err).unwrap().into()))
+                    .await;
+            }
+        }
     }
 }
 
