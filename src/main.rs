@@ -43,7 +43,9 @@ async fn main() {
         .join("frontend")
         .join("dist");
 
-    let state = AppState::new();
+    let top_10 = AppState::load_top_10().await;
+    println!("top_10 loaded: {:#?}", top_10);
+    let state = AppState::new_with_top_10(top_10);
     let app = Router::new()
         .fallback_service(ServeDir::new(assets_dir).append_index_html_on_directories(true))
         .route("/ws", any(ws_handler))
@@ -128,7 +130,15 @@ async fn handle_connection(mut ws: WebSocket, state: AppState) {
     // so that we can forward updates to this socket.
     let mut room_rx_opt: Option<broadcast::Receiver<WsServerMsg>> = None;
 
-    let scores: Vec<_> = state.top_10.lock().await.clone().into_sorted_vec();
+    let scores: Vec<(u32, String)> = state
+        .top_10
+        .lock()
+        .await
+        .clone()
+        .into_sorted_vec()
+        .into_iter()
+        .map(|r| (r.0 .0, r.1))
+        .collect();
     let top_10_msg = WsServerMsg::Top10Scores { scores };
     let _ = ws
         .send(Message::Text(
@@ -363,12 +373,14 @@ async fn handle_client_msg(
                         if let Some(room_state) = rooms.get_mut(&room_id) {
                             for (pid, score) in room_state.scores.iter() {
                                 if let Some(player) = room_state.players.get(pid) {
-                                    top_10.push((*score, player.name.clone()));
+                                    top_10.push((std::cmp::Reverse(*score), player.name.clone()));
                                     if top_10.len() > 10 {
                                         top_10.pop(); // maintain only top 10
                                     }
                                 }
                             }
+
+                            AppState::save_top_10(&top_10).await;
                         }
                     }
                     // When timer ends (sec_left hits 0 and we sleep one last second),
