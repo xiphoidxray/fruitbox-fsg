@@ -8,5 +8,9 @@ export default {
     extend: {},
   },
   plugins: [],
+safelist: [
+  'max-h-[30rem]',
+  'max-h-[23rem]',
+],
 }
 
