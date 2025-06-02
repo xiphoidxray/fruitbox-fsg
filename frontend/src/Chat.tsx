@@ -3,8 +3,14 @@ import { useState, useRef, useEffect } from "react";
 interface ChatProps {
   chatMessages: { playerId: string; name: string; text: string }[];
   sendChatMessage: (text: string) => void;
+  maxHeight?: string; // e.g. "30rem"
 }
-export default function Chat({ chatMessages, sendChatMessage }: ChatProps) {
+
+export default function Chat({
+  chatMessages,
+  sendChatMessage,
+  maxHeight = "30rem",
+}: ChatProps) {
   const [input, setInput] = useState("");
   const messagesTopRef = useRef<HTMLDivElement>(null);
 
@@ -21,12 +27,14 @@ export default function Chat({ chatMessages, sendChatMessage }: ChatProps) {
     setInput("");
   }
 
+  // Convert maxHeight to Tailwind-friendly class
+  const maxHeightClass = `max-h-[${maxHeight}]`;
+
   return (
-    <div className="flex flex-col max-h-[400px] border rounded-lg">
+    <div className={`flex flex-col h-full ${maxHeightClass}`}>
       {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto mb-4 space-y-3 pr-2 pb-4 pl-2">
-        <div ref={messagesTopRef} />
-        {limitedMessages.length === 0 ? (
+      <div className="flex-1 overflow-y-auto mb-4 space-y-3 pr-2 min-h-0">
+        {chatMessages.length === 0 ? (
           <div className="text-center text-gray-400 text-sm mt-8">
             <p>No messages yet...</p>
           </div>
@@ -55,7 +63,7 @@ export default function Chat({ chatMessages, sendChatMessage }: ChatProps) {
       </div>
 
       {/* Input Area */}
-      <div className="border-t border-gray-200 pt-3 pl-2 pr-2">
+      <div className="flex-shrink-0 border-t border-gray-200 pt-3">
         <div className="flex gap-2">
           <input
             type="text"

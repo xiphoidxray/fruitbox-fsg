@@ -4,6 +4,7 @@ import type {
   WsServerMsg,
   Player,
 } from "./types/ws";
+import toast from "react-hot-toast";
 
 // interface GameState {
 //   roomId: string | null;
@@ -121,6 +122,7 @@ export function useGameSocket(displayName: string) {
 
         case "Error": {
           setError(msg.data.msg);
+          toast.error(msg.data.msg);
           break;
         }
         case "Top10Scores": {
