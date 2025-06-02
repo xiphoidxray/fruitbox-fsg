@@ -27,13 +27,12 @@ export default function Chat({
     setInput("");
   }
 
-  // Convert maxHeight to Tailwind-friendly class
-  const maxHeightClass = `max-h-[${maxHeight}]`;
+  const heightClass = `h-[${maxHeight}]`;
 
   return (
-    <div className={`flex flex-col h-full ${maxHeightClass}`}>
+    <div className={`flex flex-col h-full ${heightClass}`}>
       {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto mb-4 space-y-3 pr-2 min-h-0">
+      <div className="flex-1 overflow-y-auto mb-4 space-y-3 pr-2 h-80">
         {chatMessages.length === 0 ? (
           <div className="text-center text-gray-400 text-sm mt-8">
             <p>No messages yet...</p>

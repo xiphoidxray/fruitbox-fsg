@@ -9,8 +9,8 @@ export default {
   },
   plugins: [],
 safelist: [
-  'max-h-[30rem]',
-  'max-h-[23rem]',
+  'h-[30rem]',
+  'h-[23rem]',
 ],
 }
 
