@@ -30,7 +30,7 @@ export default function Chat({
   const heightClass = `h-[${maxHeight}]`;
 
   return (
-    <div className={`flex flex-col h-full ${heightClass}`}>
+    <div className={`flex flex-col ${heightClass}`}>
       {/* Messages Area */}
       <div className="flex-1 overflow-y-auto mb-4 space-y-3 pr-2 h-80">
         {chatMessages.length === 0 ? (
