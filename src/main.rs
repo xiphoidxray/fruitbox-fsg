@@ -21,11 +21,31 @@ use tower_http::{
 
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-//allows to extract the IP of connecting user
+// allows to extract the IP of connecting user
 use axum::extract::connect_info::ConnectInfo;
 
 pub mod server_state;
 pub mod ws_messages;
+
+/// Holds all of the per‐connection mutable state:
+///   - which room this socket has joined (if any)
+///   - this client’s PlayerId (once they create or join)
+///   - the broadcast‐receiver, used to forward room broadcasts back to this socket
+struct ConnContext {
+    joined_room: Option<RoomId>,
+    my_player_id: Option<PlayerId>,
+    room_rx: Option<broadcast::Receiver<WsServerMsg>>,
+}
+
+impl ConnContext {
+    fn new() -> Self {
+        ConnContext {
+            joined_room: None,
+            my_player_id: None,
+            room_rx: None,
+        }
+    }
+}
 
 #[tokio::main]
 async fn main() {
@@ -43,14 +63,16 @@ async fn main() {
         .join("frontend")
         .join("dist");
 
+    // Load persisted top-10 scores from disk
     let top_10 = AppState::load_top_10().await;
     println!("top_10 loaded: {:#?}", top_10);
     let state = AppState::new_with_top_10(top_10);
+
     let app = Router::new()
         .fallback_service(ServeDir::new(assets_dir).append_index_html_on_directories(true))
         .route("/ws", any(ws_handler))
         .layer(
-            TraceLayer::new_for_http() // logging so we can see what's going on
+            TraceLayer::new_for_http()
                 .make_span_with(DefaultMakeSpan::default().include_headers(true)),
         )
         .with_state(state.clone());
@@ -68,18 +90,16 @@ async fn main() {
     .unwrap();
 }
 
-/// The handler for the HTTP request and switches from HTTP to
-/// websocket protocol.
-/// This is the last point where we can extract TCP/IP metadata such as IP address of the client
-/// as well as things from HTTP headers such as user-agent of the browser etc.
+/// The handler for the HTTP request that upgrades to WebSocket.
+/// We also log the user‐agent and client address once per connection.
 async fn ws_handler(
     ws: WebSocketUpgrade,
     user_agent: Option<TypedHeader<headers::UserAgent>>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     State(state): State<AppState>,
 ) -> impl IntoResponse {
-    let user_agent = if let Some(TypedHeader(user_agent)) = user_agent {
-        user_agent.to_string()
+    let user_agent = if let Some(TypedHeader(ua)) = user_agent {
+        ua.to_string()
     } else {
         String::from("Unknown browser")
     };
@@ -87,9 +107,9 @@ async fn ws_handler(
     ws.on_upgrade(move |socket| handle_socket(socket, addr, state))
 }
 
-/// Actual websocket statemachine (one will be spawned per connection)
+/// Actual WebSocket state machine: one instance per connection.
 async fn handle_socket(mut socket: WebSocket, who: SocketAddr, state: AppState) {
-    // send a ping (unsupported by some browsers) just to kick things off and get a response
+    // send a ping to start the conversation
     if socket
         .send(Message::Ping(Bytes::from_static(&[1, 2, 3])))
         .await
@@ -97,39 +117,33 @@ async fn handle_socket(mut socket: WebSocket, who: SocketAddr, state: AppState) 
     {
         println!("Pinged {who}...");
     } else {
-        println!("Could not send ping {who}!");
-        // no Error here since the only thing we can do is to close the connection.
-        // If we can not send messages, there is no way to salvage the statemachine anyway.
+        println!("Could not send ping {who}! Closing.");
         return;
     }
 
-    // receive single message from a client (we can either receive or send with socket).
-    // this will likely be the Pong for our Ping or a hello message from client.
-    // waiting for message from a client will block this task, but will not block other client's
-    // connections.
+    // expect a Pong back
     if let Some(Ok(Message::Pong(_))) = socket.recv().await {
-        println!("Received Pong from {who}—let’s proceed.");
+        println!("Received Pong from {who}. Continuing.");
     } else {
-        println!("Did not receive Pong; closing.");
+        println!("Did not receive Pong from {who}; closing.");
         return;
     }
 
     handle_connection(socket, state).await;
 
-    // returning from the handler closes the websocket connection
-    println!("Websocket context {who} destroyed");
+    // once handle_connection returns, we close this WebSocket
+    println!("WebSocket context {who} destroyed");
 }
 
-/// The “per‐connection” logic.
+/// The “per‐connection” logic, now using a `ConnContext` to group mutable state.
+/// First: send the Top-10 snapshot to the client, then loop reading either:
+///   1) a broadcast message from the room, or
+///   2) a client→server JSON text message.
 async fn handle_connection(mut ws: WebSocket, state: AppState) {
-    // We need to track which room (if any) this socket is in, and the player's ID.
-    let mut joined_room: Option<RoomId> = None;
-    let mut my_player_id: Option<PlayerId> = None;
+    // initialize our per-connection context
+    let mut ctx = ConnContext::new();
 
-    // We’ll hold a `broadcast::Receiver<WsServerMsg>` once the client joins a room
-    // so that we can forward updates to this socket.
-    let mut room_rx_opt: Option<broadcast::Receiver<WsServerMsg>> = None;
-
+    // 1) Send Top-10 scores immediately on connect
     let scores: Vec<(u32, String)> = state
         .top_10
         .lock()
@@ -146,27 +160,29 @@ async fn handle_connection(mut ws: WebSocket, state: AppState) {
         ))
         .await;
 
-    // Loop until the socket is closed
+    // 2) Enter main event loop:
     loop {
         tokio::select! {
-            // if this socket is subscribed to a room, try to pull the next broadcast msg:
+            // (A) If we have a subscription to a room's broadcast channel, wait for it:
             biased;
-            Some(room_rx) = async { if let Some(rx) = room_rx_opt.as_mut() { Some(rx.recv().await) } else { None } } => {
-                match room_rx {
+            Some(room_rx_result) = async { if let Some(rx) = ctx.room_rx.as_mut() { Some(rx.recv().await) } else { None } } => {
+                match room_rx_result {
                     Ok(server_msg) => {
-                        // Serialize and send to the client as text
                         let text = serde_json::to_string(&server_msg).unwrap();
                         if ws.send(Message::Text(text.into())).await.is_err() {
                             break; // client disconnected
                         }
                     }
                     Err(RecvError::Lagged(_)) => {
-                        // we skipped some messages; you could choose to send a full snapshot instead
+                        // missed some messages → we just continue
                         continue;
                     }
                     Err(RecvError::Closed) => {
-                        // The room is gone (perhaps it was deleted); close the socket.
-                        let close_payload = WsServerMsg::Error { room_id: joined_room.clone(), msg: "Room closed".to_string() };
+                        // room was closed → notify client, then break
+                        let close_payload = WsServerMsg::Error {
+                            room_id: ctx.joined_room.clone(),
+                            msg: "Room closed".to_string(),
+                        };
                         let text = serde_json::to_string(&close_payload).unwrap();
                         let _ = ws.send(Message::Text(text.into())).await;
                         break;
@@ -174,15 +190,18 @@ async fn handle_connection(mut ws: WebSocket, state: AppState) {
                 }
             },
 
-            // Read the next client→server message
+            // (B) Read client→server message
             Some(Ok(msg)) = ws.recv() => {
                 if let Message::Text(txt) = msg {
                     match serde_json::from_str::<WsClientMsg>(&txt) {
                         Ok(client_msg) => {
-                            handle_client_msg(client_msg, &mut joined_room, &mut my_player_id, &mut room_rx_opt, &state, &mut ws).await;
+                            handle_client_msg(client_msg, &mut ctx, &state, &mut ws).await;
                         }
                         Err(e) => {
-                            let err = WsServerMsg::Error { room_id: joined_room.clone(), msg: format!("Invalid JSON: {}", e) };
+                            let err = WsServerMsg::Error {
+                                room_id: ctx.joined_room.clone(),
+                                msg: format!("Invalid JSON: {}", e),
+                            };
                             let text = serde_json::to_string(&err).unwrap();
                             let _ = ws.send(Message::Text(text.into())).await;
                         }
@@ -190,56 +209,57 @@ async fn handle_connection(mut ws: WebSocket, state: AppState) {
                 }
             },
 
-            // If the socket actually closed or errored, break out
+            // (C) If WebSocket closed or errored, exit loop
             else => break,
         }
     }
 
-    // Clean up: if we were in a room, remove ourselves from that room's state.
-    if let (Some(room_id), Some(pid)) = (&joined_room, &my_player_id) {
+    // Clean up if the client was in a room when they disconnected
+    if let (Some(room_id), Some(pid)) = (&ctx.joined_room, &ctx.my_player_id) {
         remove_player_from_room(room_id, pid, &state).await;
     }
 
     println!("WebSocket connection closed");
 }
 
-/// Core logic to handle a single client‐message.
+/// Handles a single client→server JSON message.
+/// All mutable per-connection state (joined_room, my_player_id, room_rx) is inside `ctx`.
 async fn handle_client_msg(
     client_msg: WsClientMsg,
-    joined_room: &mut Option<RoomId>,
-    my_player_id: &mut Option<PlayerId>,
-    room_rx_opt: &mut Option<broadcast::Receiver<WsServerMsg>>,
+    ctx: &mut ConnContext,
     state: &AppState,
     ws: &mut WebSocket,
 ) {
-    println!("got client msg {:#?}", client_msg);
+    // println!("got client msg: {:?}", client_msg);
     match client_msg {
         WsClientMsg::CreateRoom { player } => {
-            // Generate a new RoomId (e.g. UUID or random 6‐digit code).
+            // 1) Generate a new random RoomId (UUID string)
             let room_id = uuid::Uuid::new_v4().to_string();
 
-            // Create the RoomState and insert into global state.
+            // 2) Create a fresh RoomState and insert it into global AppState
             let mut rooms = state.rooms.lock().await;
             let mut room_state = RoomState::new(player.clone());
             room_state.scores.insert(player.player_id.clone(), 0);
             let rx = room_state.tx.subscribe();
             rooms.insert(room_id.clone(), room_state);
-            drop(rooms); // unlock
+            drop(rooms);
 
-            // Mark in this connection that we are in this room
-            *joined_room = Some(room_id.clone());
-            *my_player_id = Some(player.player_id.clone());
-            *room_rx_opt = Some(rx);
+            // 3) Update this connection's context
+            ctx.joined_room = Some(room_id.clone());
+            ctx.my_player_id = Some(player.player_id.clone());
+            ctx.room_rx = Some(rx);
 
-            // Send back RoomCreated and JoinedRoom messages
+            // 4) Debug print
+            println!("{} created room {}", player.name, room_id);
+
+            // 5) Send back RoomCreated and JoinedRoom
             let created = WsServerMsg::RoomCreated {
                 room_id: room_id.clone(),
             };
             let joined = WsServerMsg::JoinedRoom {
                 room_id: room_id.clone(),
-                players: vec![player],
+                players: vec![player.clone()],
             };
-
             let _ = ws
                 .send(Message::Text(
                     serde_json::to_string(&created).unwrap().into(),
@@ -253,12 +273,12 @@ async fn handle_client_msg(
         }
 
         WsClientMsg::JoinRoom { room_id, player } => {
-            // Try to add this player to the existing room
+            // 1) Try to add this player to an existing room
             let mut rooms = state.rooms.lock().await;
             let player_id = player.player_id.clone();
             if let Some(room_state) = rooms.get_mut(&room_id) {
-                // Add player
                 if room_state.players.contains_key(&player_id) {
+                    // Already in room → error
                     let err = WsServerMsg::Error {
                         room_id: Some(room_id.clone()),
                         msg: "Already in room".to_string(),
@@ -268,32 +288,41 @@ async fn handle_client_msg(
                         .await;
                     return;
                 }
+                // 2) Insert into room’s player list and reset their score
                 room_state.players.insert(player_id.clone(), player.clone());
                 room_state.scores.insert(player_id.clone(), 0);
-                println!("room_state: {:#?}", room_state);
+
+                // Debug print
+                println!("room_state after join: {:#?}", room_state);
+
+                // 3) Subscribe to that room’s broadcast channel
                 let rx = room_state.tx.subscribe();
-                // broadcast updated player list
+
+                // 4) Broadcast updated player list
                 let players: Vec<_> = room_state.players.values().cloned().collect();
                 let msg = WsServerMsg::RoomPlayersUpdate {
                     room_id: room_id.clone(),
                     players: players.clone(),
                 };
                 let _ = room_state.tx.send(msg);
+                drop(rooms);
 
-                drop(rooms); // unlock
+                // 5) Update context
+                ctx.joined_room = Some(room_id.clone());
+                ctx.my_player_id = Some(player_id.clone());
+                ctx.room_rx = Some(rx);
 
-                *joined_room = Some(room_id.clone());
-                *my_player_id = Some(player_id.clone());
-                *room_rx_opt = Some(rx);
+                // Debug print
+                println!("{} joined room {}", player.name, room_id);
 
-                // Acknowledge to the joining client
-                let joined = WsServerMsg::JoinedRoom {
+                // 6) Acknowledge to the joining client
+                let joined_msg = WsServerMsg::JoinedRoom {
                     room_id: room_id.clone(),
                     players,
                 };
                 let _ = ws
                     .send(Message::Text(
-                        serde_json::to_string(&joined).unwrap().into(),
+                        serde_json::to_string(&joined_msg).unwrap().into(),
                     ))
                     .await;
             } else {
@@ -309,10 +338,10 @@ async fn handle_client_msg(
         }
 
         WsClientMsg::StartGame { room_id } => {
-            // Only the owner can actually start
+            // 1) Only the owner may start
             let mut rooms = state.rooms.lock().await;
             if let Some(room_state) = rooms.get_mut(&room_id) {
-                let caller = my_player_id.as_ref().unwrap();
+                let caller = ctx.my_player_id.as_ref().unwrap();
                 if *caller != room_state.owner {
                     let err = WsServerMsg::Error {
                         room_id: Some(room_id.clone()),
@@ -324,12 +353,19 @@ async fn handle_client_msg(
                     return;
                 }
 
-                // If a previous game is running, abort its timer so we can start fresh:
+                let name = room_state
+                    .players
+                    .get(caller)
+                    .map_or("Unknown player", |p| p.name.as_str());
+                println!("{} started game with room id {}", name, room_id);
+
+                // 2) If a prior timer was running, cancel it
                 if let Some(handle) = room_state.timer_handle.take() {
+                    println!("Cancelling previous timer for room {}", room_id);
                     let _ = handle.abort();
                 }
 
-                // Generate a random board: e.g. 17×10 with values 1–9
+                // 3) Generate a new random board
                 let mut board: BoardData = Vec::new();
                 for _y in 0..ROWS {
                     for _x in 0..COLS {
@@ -338,13 +374,14 @@ async fn handle_client_msg(
                     }
                 }
                 room_state.board = Some(board.clone());
+                println!("Generated new board for room {}: {:?}", room_id, board);
 
-                // Reset all players’ scores
+                // 4) Reset all players’ scores in this room
                 for pid in room_state.players.keys() {
                     room_state.scores.insert(pid.clone(), 0);
                 }
 
-                // Broadcast a GameStarted message to all in room
+                // 5) Broadcast GameStarted to everyone in room
                 let start_msg = WsServerMsg::GameStarted {
                     room_id: room_id.clone(),
                     board: board.clone(),
@@ -352,13 +389,12 @@ async fn handle_client_msg(
                 };
                 let _ = room_state.tx.send(start_msg);
 
-                // Spawn a timer task that ticks every second (or ms) for GAME_DURATION_SECS
+                // 6) Spawn a countdown task that also updates global top-10 when finished
                 let tx_clone = room_state.tx.clone();
                 let room_clone = room_id.clone();
                 let top_10_arc = state.top_10.clone();
                 let rooms_clone = state.rooms.clone();
                 let handle = tokio::spawn(async move {
-                    // let start_time = Instant::now();
                     for sec_left in (0..=GAME_DURATION_SECS).rev() {
                         let tick = WsServerMsg::TimerTick {
                             room_id: room_clone.clone(),
@@ -367,27 +403,47 @@ async fn handle_client_msg(
                         let _ = tx_clone.send(tick);
                         tokio::time::sleep(Duration::from_secs(1)).await;
                     }
+
+                    // Once timer hits zero, record final scores into top-10
                     {
                         let mut top_10 = top_10_arc.lock().await;
                         let mut rooms = rooms_clone.lock().await;
+
                         if let Some(room_state) = rooms.get_mut(&room_id) {
+                            println!(
+                                "Game timer for room {} finished, scores: {:?}",
+                                room_id, room_state.scores
+                            );
+
+                            let mut changed = false;
                             for (pid, score) in room_state.scores.iter() {
                                 if let Some(player) = room_state.players.get(pid) {
-                                    top_10.push((std::cmp::Reverse(*score), player.name.clone()));
-                                    if top_10.len() > 10 {
-                                        top_10.pop(); // maintain only top 10
+                                    let player_name = player.name.clone();
+                                    if top_10.len() < 10 {
+                                        top_10.push((std::cmp::Reverse(*score), player_name));
+                                        changed = true;
+                                    } else if let Some((std::cmp::Reverse(min_score), _)) =
+                                        top_10.peek()
+                                    {
+                                        if *score > *min_score {
+                                            println!(
+                                                "Updating top-10: {} scored {}",
+                                                player_name, score
+                                            );
+                                            top_10.pop();
+                                            top_10.push((std::cmp::Reverse(*score), player_name));
+                                            changed = true;
+                                        }
                                     }
                                 }
                             }
 
-                            AppState::save_top_10(&top_10).await;
+                            if changed {
+                                AppState::save_top_10(&top_10).await;
+                            }
                         }
                     }
-                    // When timer ends (sec_left hits 0 and we sleep one last second),
-                    // we might want to broadcast a final LeaderboardUpdate or “game over.”
-                    // For simplicity, do nothing here (clients will see timer = 0).
                 });
-
                 room_state.timer_handle = Some(handle);
                 drop(rooms);
             } else {
@@ -419,23 +475,26 @@ async fn handle_client_msg(
                     return;
                 }
 
-                // Add the cleared_count to that player’s total
+                // 1) Update this player’s score in the room
                 let entry = room_state.scores.entry(player_id.clone()).or_insert(0);
                 *entry += cleared_count;
 
-                // Broadcast updated leaderboard AND (optionally) current board
+                // 2) Debug print: who scored how much
+                if let Some(player) = room_state.players.get(&player_id) {
+                    println!("{} scored {}, total {}", player.name, cleared_count, entry);
+                }
+
+                // 3) Broadcast updated leaderboard to all clients in room
                 let scores_vec: Vec<_> = room_state
                     .scores
                     .iter()
                     .map(|(pid, &s)| (pid.clone(), s))
                     .collect();
-
                 let lb_msg = WsServerMsg::LeaderboardUpdate {
                     room_id: room_id.clone(),
                     scores: scores_vec,
                 };
                 let _ = room_state.tx.send(lb_msg);
-
                 drop(rooms);
             } else {
                 let err = WsServerMsg::Error {
@@ -453,7 +512,8 @@ async fn handle_client_msg(
             player_id: _,
             message,
         } => {
-            let player_id = match my_player_id {
+            // 1) Must have a PlayerId in context
+            let player_id = match &ctx.my_player_id {
                 Some(pid) => pid.clone(),
                 None => {
                     let err = WsServerMsg::Error {
@@ -467,6 +527,7 @@ async fn handle_client_msg(
                 }
             };
 
+            // 2) Broadcast the chat to everyone in the room
             let mut rooms = state.rooms.lock().await;
             if let Some(room_state) = rooms.get_mut(&room_id) {
                 if let Some(player) = room_state.players.get(&player_id) {
@@ -475,6 +536,7 @@ async fn handle_client_msg(
                         player: player.clone(),
                         message: message.clone(),
                     };
+                    println!("{} send chat message: {}", player.name, message);
                     let _ = room_state.tx.send(chat_msg);
                 } else {
                     let err = WsServerMsg::Error {
@@ -498,13 +560,19 @@ async fn handle_client_msg(
     }
 }
 
-/// If a client disconnects without properly leaving the room, remove them from room state.
-/// If they were the owner, you could optionally dissolve the room or pick a new owner.
+/// If a client disconnects without properly leaving the room, remove them from that room's state.
+/// If they were the owner, you could optionally dissolve the room or reassign ownership.
 async fn remove_player_from_room(room_id: &RoomId, player_id: &PlayerId, state: &AppState) {
     let mut rooms = state.rooms.lock().await;
     if let Some(room_state) = rooms.get_mut(room_id) {
+        let player_name = room_state
+            .players
+            .get(player_id)
+            .map_or("Unknown player", |p| p.name.as_str())
+            .to_owned();
         room_state.players.remove(player_id);
         room_state.scores.remove(player_id);
+
         // Broadcast new player list
         let players: Vec<_> = room_state.players.values().cloned().collect();
         let msg = WsServerMsg::RoomPlayersUpdate {
@@ -513,19 +581,23 @@ async fn remove_player_from_room(room_id: &RoomId, player_id: &PlayerId, state: 
         };
         let _ = room_state.tx.send(msg);
 
-        // (Optional) If owner left, you might decide to end the game or hand off ownership
+        // If owner left, you could pick a new one or close the room entirely:
         if &room_state.owner == player_id {
-            // e.g. pick the next player as owner, or remove the room entirely:
-            // let new_owner = room_state.players.iter().next().cloned();
-            // room_state.owner = new_owner.unwrap_or_default(); or drop entire room.
+            // e.g. reassign or clean up:
+            // let new_owner = room_state.players.iter().next().map(|(_, p)| p.player_id.clone());
+            // room_state.owner = new_owner.unwrap_or_default();
+            println!(
+                "Owner {} left room {}, removing room.",
+                player_name, room_id
+            );
         }
 
-        // If no players remain, destroy the room
+        // If no players remain, destroy the room (and cancel timer)
         if room_state.players.is_empty() {
-            // cancel timer if still running
             if let Some(handle) = room_state.timer_handle.take() {
                 let _ = handle.abort();
             }
+            println!("Room {} is empty, removing it.", room_id);
             rooms.remove(room_id);
         }
     }
