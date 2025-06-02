@@ -42,8 +42,8 @@ export function useGameSocket(displayName: string) {
   useEffect(() => {
     // src/gameSocket.ts
     const wsProtocol = window.location.protocol === "https:" ? "wss" : "ws";
-    // const wsUrl = `${wsProtocol}://${window.location.host}/ws`;
-    const wsUrl = `${wsProtocol}://127.0.0.1:3123/ws`;
+    const wsUrl = `${wsProtocol}://${window.location.host}/ws`;
+    // const wsUrl = `${wsProtocol}://127.0.0.1:3123/ws`;
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 
