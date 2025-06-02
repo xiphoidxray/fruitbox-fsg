@@ -1,7 +1,6 @@
 import React from "react";
 import appleImage from "./applev2.png"; // adjust path as needed
 import appleHighlightedImage from "./applev2-highlighted.png"; // highlighted apple image
-import "./App.css";
 
 interface AppleProps {
   x: number;
@@ -18,33 +17,38 @@ export default function Apple({
   selected,
   cleared,
 }: AppleProps) {
+  // Grid placement is still handled via inline style:
   const style: React.CSSProperties = {
     gridColumn: x + 1,
     gridRow: y + 1,
-    visibility: cleared ? "hidden" : "visible",
     position: "relative",
+    // If cleared, make the element invisible
+    visibility: cleared ? "hidden" : "visible",
   };
 
-  const className = `apple${
-    cleared ? " cleared" : ""
-  }`;
+  // Always apply the “base apple” classes,
+  // then if selected, add a golden outline,
+  // if cleared, we already set `visibility: hidden`.
+  const baseClasses =
+    "flex items-center justify-center font-bold text-white relative w-[90%] ";
 
-  // Choose the appropriate image based on selection
-  const imageSrc = selected ? appleHighlightedImage : appleImage;
+  // When selected, add a 3px gold outline. If not, omit.
+  // const selectedClasses = selected
+  // ? "outline outline-[3px] outline-gold"
+  // : "";
 
   return (
-    <div className={className} style={style}>
+    <div className={`${baseClasses} `} style={style}>
       <img
-        src={imageSrc}
+        src={selected ? appleHighlightedImage : appleImage}
         alt={`Apple ${value}`}
-        style={{
-          width: "115%",
-          height: "115%",
-          objectFit: "contain",
-          pointerEvents: "none",
-        }}
+        className="object-contain pointer-events-none transform scale-[1.20]"
       />
-      <div className="apple-value">{value}</div>
+      <div
+        className="absolute top-[60%] left-1/2 -translate-x-[14.5px] -translate-y-[17px] pointer-events-none text-white w-[80%] h-[80%] flex items-center justify-center text-lg font-bold"
+      >
+        {value}
+      </div>
     </div>
   );
 }

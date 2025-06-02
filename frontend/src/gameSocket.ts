@@ -41,7 +41,8 @@ export function useGameSocket(displayName: string) {
   useEffect(() => {
     // src/gameSocket.ts
     const wsProtocol = window.location.protocol === "https:" ? "wss" : "ws";
-    const wsUrl = `${wsProtocol}://${window.location.host}/ws`;
+    // const wsUrl = `${wsProtocol}://${window.location.host}/ws`;
+    const wsUrl = `${wsProtocol}://127.0.0.1:3123/ws`;
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 
@@ -71,7 +72,7 @@ export function useGameSocket(displayName: string) {
         case "JoinedRoom": {
           setRoomId(msg.data.room_id);
           setPlayers(msg.data.players);
-          // Find “my” ID from the returned players list
+          // Find "my" ID from the returned players list
           // Assuming displayName is unique in that room:
           //   const me = msg.data.players.find((p) => p.name === displayName);
           //   if (me) setMyId(me.player_id);
@@ -196,6 +197,11 @@ export function useGameSocket(displayName: string) {
     wsRef.current.send(JSON.stringify(m));
   }
 
+  /** Clear the current error */
+  function clearError() {
+    setError(null);
+  }
+
   return {
     roomId,
     players,
@@ -210,6 +216,7 @@ export function useGameSocket(displayName: string) {
     reportScore,
     chatMessages,
     sendChatMessage,
-    top10Scores
+    top10Scores,
+    clearError,
   };
 }
