@@ -55,7 +55,7 @@ async fn main() {
         )
         .with_state(state.clone());
 
-    let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
+    let addr = SocketAddr::from(([127, 0, 0, 1], 3123));
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
 
     tracing::debug!("listening on {}", listener.local_addr().unwrap());
