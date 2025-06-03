@@ -266,7 +266,7 @@ export default function App() {
                     <div className="bg-white p-4 rounded-2xl shadow-lg border-2 border-green-300 h-full">
                       <div className="text-center mb-4">
                         <h2 className="text-lg font-bold text-green-800">
-                          🏆 Hall of Fame
+                          Top 10 Scores
                         </h2>
                       </div>
                       <div className="space-y-2">
