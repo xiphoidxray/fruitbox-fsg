@@ -349,11 +349,32 @@ export default function App() {
 
       <div className="min-h-screen bg-white flex flex-col w-screen">
         {/* Compact Room Header */}
-        <div className="bg-gray-50  border-gray-200 p-4">
-          <div className="max-w-full mx-auto flex flex-col sm:flex-row items-center justify-between">
+        <div className="bg-gray-50 border-gray-200 p-4 relative">
+          {/* Home Button - positioned absolutely in top-left corner */}
+          <button
+            onClick={() => window.location.reload()}
+            className="absolute top-4 left-4 p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-200 rounded-lg transition-colors duration-200 group"
+            title="Go to Home"
+          >
+            <svg 
+              className="w-5 h-5" 
+              fill="none" 
+              stroke="currentColor" 
+              viewBox="0 0 24 24"
+            >
+              <path 
+                strokeLinecap="round" 
+                strokeLinejoin="round" 
+                strokeWidth={2} 
+                d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" 
+              />
+            </svg>
+          </button>
+
+          <div className="max-w-full mx-auto flex flex-col sm:flex-row items-center justify-between pl-12">
             {/* Room ID and Players */}
             <div className="flex flex-col sm:flex-row items-center gap-6">
-              <div className="flex items-center px-4 py-2 rounded-lg  border-gray-300">
+              <div className="flex items-center px-4 py-2 rounded-lg border-gray-300">
                 <span className="text-sm font-bold text-gray-700">
                   Room: <span className="text-red-600 bg-gray-100 px-2 py-1 rounded ml-2 text-xs">{roomId}</span>
                 </span>
@@ -411,7 +432,7 @@ export default function App() {
 
             {/* Timer */}
             <div
-              className={`px-6 py-2 rounded-lg text-xl font-bold   ${timer > 30
+              className={`px-6 py-2 rounded-lg text-xl font-bold ${timer > 30
                 ? "bg-green-100 text-green-800"
                 : timer > 10
                   ? "bg-orange-100 text-orange-800"
