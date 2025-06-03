@@ -10,7 +10,7 @@ import appleHighlightedImage from "./applev2-highlighted.png"; // highlighted ap
 
 
 export default function App() {
- const [name, setName] = useState<string>(() => {
+ const [name] = useState<string>(() => {
     // Try to get name from localStorage
     const storedName = localStorage.getItem("playerName");
     if (storedName) return storedName;
