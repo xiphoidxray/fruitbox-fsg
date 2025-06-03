@@ -3,29 +3,6 @@
 @tailwind utilities;
 
 
-/* wrapper and general styles */
-.wrapper {
-  margin: 0 auto;
-  padding: 1rem;
-  text-align: center;
-  font-family: system-ui, sans-serif;
-}
-
-.error {
-  color: crimson;
-  font-weight: bold;
-}
-
-/* lobby */
-.lobby {
-  margin-bottom: 1rem;
-}
-.lobby input {
-  width: 120px;
-  padding: 0.25rem;
-  margin-right: 0.5rem;
-}
-
 /* board */
 .board {
   position: relative;
@@ -40,42 +17,6 @@
   user-select: none;
 }
 
-/* the individual apple */
-.apple {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: bold;
-  color: white;
-  font-size: 1.2rem;
-  height: auto;
-  width: 90%;
-}
-
-.apple-value {
-  position: absolute;
-  top: 60%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  pointer-events: none;
-  color: #fff;
-  border-radius: 50%;
-  width: 80%;
-  height: 80%;
-  margin: auto;
-  transition: outline 0.1s;  
-}
-
-/* highlighted by the drag box */
-.apple.selected {
-  outline: 3px solid gold;
-}
-
-/* disappeared when cleared */
-.apple.cleared {
-  visibility: hidden;
-}
 
 /* the translucent yellow drag rectangle */
 .drag-rect {
@@ -84,27 +25,4 @@
   border: 1px solid rgb(114, 138, 237);
   pointer-events: none;
   z-index: 10;
-}
-
-/* leaderboard */
-.leaderboard {
-  margin: 1rem auto;
-  border-collapse: collapse;
-  width: 400px;
-}
-.leaderboard th,
-.leaderboard td {
-  border: 1px solid #999;
-  padding: 0.5rem 1rem;
-}
-.leaderboard tr.me {
-  background: #f0f4c3; /* highlight your own row */
-}
-
-.center-container {
-  display: flex;
-  flex-direction: column;
-  min-height: 100vh; 
-  max-height: 100vh; 
-  min-width: 100vw;
 }
