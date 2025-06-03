@@ -1,4 +1,4 @@
-{ pkgs ? import <nixpkgs> {} }:
+{ pkgs ? import <nixpkgs> { config.allowUnfree = true; } }:
 
 pkgs.mkShell {
   buildInputs = [
@@ -6,4 +6,3 @@ pkgs.mkShell {
     pkgs.ngrok
   ];
 }
-
