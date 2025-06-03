@@ -17,7 +17,9 @@ export default function App() {
 
     // If not found, prompt and save it
     const enteredName = prompt("Enter your name")?.trim() || "anon";
-    localStorage.setItem("playerName", enteredName);
+    if (enteredName != "anon") {
+      localStorage.setItem("playerName", enteredName);
+    }
     return enteredName;
   });
   const [joinInput, setJoinInput] = useState("");
