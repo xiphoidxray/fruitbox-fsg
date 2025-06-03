@@ -45,7 +45,7 @@ export default function Apple({
         className="object-contain pointer-events-none transform scale-[1.20]"
       />
       <div
-        className="absolute top-[60%] left-1/2 -translate-x-[14.5px] -translate-y-[17px] pointer-events-none text-white w-[80%] h-[80%] flex items-center justify-center text-lg font-bold"
+        className="absolute top-[60%] left-1/2 -translate-x-[14.5px] -translate-y-[17px] pointer-events-none text-white w-[80%] h-[80%] flex items-center justify-center text-lg font-bold font-ubuntuSansMono"
       >
         {value}
       </div>
