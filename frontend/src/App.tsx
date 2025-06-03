@@ -10,7 +10,7 @@ import appleHighlightedImage from "./applev2-highlighted.png"; // highlighted ap
 
 
 export default function App() {
- const [name] = useState<string>(() => {
+  const [name] = useState<string>(() => {
     // Try to get name from localStorage
     const storedName = localStorage.getItem("playerName");
     if (storedName) return storedName;
@@ -104,16 +104,17 @@ export default function App() {
             {/* Main Title */}
             {board.length === 0 && (
               <div className="mb-6 text-center">
-                <div className="mb-4">
-                  <h1
-                    className="text-7xl font-bold bg-gradient-to-r from-red-500 to-green-500 bg-clip-text text-transparent drop-shadow-lg animate-[gradient_3s_ease-in-out_infinite] bg-[length:200%_200%]"
-                    style={{
-                      backgroundImage:
-                        "linear-gradient(45deg, #ef4444, #f97316, #eab308, #22c55e, #ef4444)",
-                      animation: "gradient 3s ease-in-out infinite",
-                    }}
-                  >
-                    🍏 Fruitbox Multiplayer 🍊
+                <div className="mb-4 flex items-center justify-center gap-3">
+                  <img
+                    src={appleImage}
+                    alt="Apple"
+                    className="w-20 h-20"
+                  />
+                  <h1 className="text-7xl font-bold text-red-500 drop-shadow-lg font-[Pacifico]">
+                    Fruitbox
+                  </h1>
+                  <h1 className="text-7xl font-bold text-green-500 drop-shadow-lg font-[Pacifico]">
+                    Multiplayer
                   </h1>
                 </div>
                 <p className="text-lg text-green-700 font-medium">
