@@ -7,7 +7,7 @@ export default defineConfig({
   server: {
     proxy: {
       '/ws': {
-        target: 'http://localhost:3000',
+        target: 'http://localhost:3123',
         ws: true,
       },
     },

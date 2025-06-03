@@ -4,6 +4,8 @@ import Board from "./Board";
 import Chat from "./Chat";
 import Leaderboard from "./Leaderboard";
 import { Toaster } from "react-hot-toast";
+import appleImage from "./applev2.png"; // adjust path as needed
+import appleHighlightedImage from "./applev2-highlighted.png"; // highlighted apple image
 
 export default function App() {
   const [name] = useState<string>(() => prompt("Enter your name")?.trim() || "anon");
@@ -18,6 +20,7 @@ export default function App() {
     error,
     createRoom,
     joinRoom,
+    readyUp, // Add readyUp from useGameSocket
     startGame,
     reportScore,
     myId,
@@ -25,6 +28,7 @@ export default function App() {
     sendChatMessage,
     top10Scores,
     clearError,
+    ownerId,
   } = useGameSocket(name);
 
   // Auto-dismiss error after 1.5 seconds
@@ -41,11 +45,24 @@ export default function App() {
   // Check if game is active (board has been set up)
   const isGameActive = roomId && board.length > 0;
 
+  // Check if current user is owner
+  const isOwner = myId === ownerId;
+
   // Lobby/Menu Page
   if (!isGameActive) {
     return (
       <>
         <Toaster />
+        <img
+          src={appleHighlightedImage}
+          alt=""
+          className="aboslute hidden"
+        />
+        <img
+          src={appleImage}
+          alt=""
+          className="aboslute hidden"
+        />
         <div className="flex w-screen flex-col min-h-screen items-center justify-center p-4 bg-gradient-to-br from-green-100 to-green-200 relative">
           {/* Checkered pattern overlay */}
           <div
@@ -156,11 +173,18 @@ export default function App() {
                               {players.map((player, idx) => (
                                 <div
                                   key={idx}
-                                  className="bg-green-100 px-4 py-2 rounded-lg border border-green-300"
+                                  className="bg-green-100 px-4 py-2 rounded-lg border border-green-300 flex items-center gap-2"
                                 >
                                   <span className="font-bold text-green-800">
                                     {player.name}
+                                    {player.player_id === ownerId && (
+                                      <span className="text-purple-600 text-xs ml-1 font-normal">(owner)</span>
+                                    )}
                                   </span>
+                                  {/* Show checkmark for ready players, but not for owner */}
+                                  {player.player_id !== ownerId && player.ready && (
+                                    <span className="text-green-600 text-sm">✓</span>
+                                  )}
                                 </div>
                               ))}
                             </div>
@@ -171,13 +195,31 @@ export default function App() {
                             )}
                           </div>
 
+                          {/* Show Start Game button to owner, Ready Up button to others */}
                           <div className="text-center">
-                            <button
-                              onClick={() => startGame()}
-                              className="bg-purple-600 hover:bg-purple-700 text-white font-bold px-8 py-3 rounded-lg shadow-sm transition-colors duration-200 border border-purple-700"
-                            >
-                              Start Game
-                            </button>
+                            {isOwner ? (
+                              <button
+                                onClick={() => startGame()}
+                                className="bg-purple-600 hover:bg-purple-700 text-white font-bold px-8 py-3 rounded-lg shadow-sm transition-colors duration-200 border border-purple-700"
+                              >
+                                Start Game
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => {
+                                  // Toggle ready state
+                                  const currentPlayer = players.find(p => p.player_id === myId);
+                                  const newReadyState = !currentPlayer?.ready;
+                                  readyUp(newReadyState);
+                                }}
+                                className={`px-8 py-3 rounded-lg shadow-sm transition-colors duration-200 font-bold ${players.find(p => p.player_id === myId)?.ready
+                                    ? "bg-red-500 hover:bg-red-600 text-white border border-red-600"
+                                    : "bg-green-500 hover:bg-green-600 text-white border border-green-600"
+                                  }`}
+                              >
+                                {players.find(p => p.player_id === myId)?.ready ? "Not Ready" : "Ready Up!"}
+                              </button>
+                            )}
                           </div>
                         </div>
                       </>
@@ -195,7 +237,7 @@ export default function App() {
                         </h2>
                       </div>
                       <div className="flex-1 p-4">
-                        <Chat chatMessages={chatMessages} sendChatMessage={sendChatMessage} maxHeight={"23rem"}/>
+                        <Chat chatMessages={chatMessages} sendChatMessage={sendChatMessage} maxHeight={"23rem"} />
                       </div>
                     </div>
                   </div>
@@ -265,15 +307,6 @@ export default function App() {
                 )}
               </div>
             </div>
-
-            {/* Auto-dismissing Error Message */}
-            {/* {error && (
-              <div className="mt-6 bg-red-100 border-2 border-red-300 rounded-2xl p-4 shadow-lg">
-                <div className="flex items-center justify-between">
-                  <p className="text-red-700 font-bold text-lg">❌ {error}</p>
-                </div>
-              </div>
-            )} */}
           </div>
         </div>
       </>
@@ -302,21 +335,48 @@ export default function App() {
                   {players.map((player, idx) => (
                     <div
                       key={idx}
-                      className="px-3 py-1 rounded-md  border-green-300"
+                      className="px-3 py-1 rounded-md border-green-300 flex items-center gap-1"
                     >
                       <span className="text-sm font-medium text-green-800">
                         {player.name}
+                        {player.player_id === ownerId && (
+                          <span className="text-purple-600 text-xs ml-1 font-normal">(owner)</span>
+                        )}
                       </span>
+                      {/* Show checkmark for ready players, but not for owner */}
+                      {player.player_id !== ownerId && player.ready && (
+                        <span className="text-green-600 text-xs">✓</span>
+                      )}
                     </div>
                   ))}
                 </div>
               </div>
-              <button
-                onClick={() => startGame()}
-                className="ml-4 bg-purple-600 hover:bg-purple-700 text-white font-bold px-4 py-1 rounded-lg shadow-sm transition-colors duration-200 border border-purple-700"
-              >
-                New Game
-              </button>
+
+              {/* Only show New Game button to owner */}
+              {isOwner ? (
+                <button
+                  onClick={() => startGame()}
+                  className="ml-4 bg-purple-600 hover:bg-purple-700 text-white font-bold px-4 py-1 rounded-lg shadow-sm transition-colors duration-200 border border-purple-700"
+                >
+                  New Game
+                </button>
+              ) : (
+
+                <button
+                  onClick={() => {
+                    // Toggle ready state
+                    const currentPlayer = players.find(p => p.player_id === myId);
+                    const newReadyState = !currentPlayer?.ready;
+                    readyUp(newReadyState);
+                  }}
+                  className={`ml-4 px-4 py-1 rounded-lg shadow-sm transition-colors duration-200 font-bold text-sm ${players.find(p => p.player_id === myId)?.ready
+                      ? "bg-red-500 hover:bg-red-600 text-white border border-red-600"
+                      : "bg-green-500 hover:bg-green-600 text-white border border-green-600"
+                    }`}
+                >
+                  {players.find(p => p.player_id === myId)?.ready ? "Not Ready" : "Ready Up!"}
+                </button>
+              )}
             </div>
 
             {/* Timer */}
@@ -369,15 +429,6 @@ export default function App() {
             </div>
           </div>
         </div>
-
-        {/* Auto-dismissing Error Message */}
-        {/* {error && (
-            <div className="mx-6 mb-6 bg-red-100 border border-red-300 rounded-lg p-4 shadow-sm">
-              <div className="flex items-center justify-between">
-                <p className="text-red-700 font-bold">❌ {error}</p>
-              </div>
-            </div>
-          )} */}
       </div>
     </>
   );

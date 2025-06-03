@@ -26,6 +26,8 @@ pub struct Player {
     pub player_id: PlayerId,
     /// The display name the player typed in (e.g. “Alice”).
     pub name: String,
+    /// Whether if the player is ready for the current game to start.
+    pub ready: bool,
 }
 
 /// All messages the **front end** can send to the server.
@@ -34,26 +36,36 @@ pub struct Player {
 #[ts(export, export_to = "../frontend/src/types/ws.ts")]
 pub enum WsClientMsg {
     /// Client wants to create a new room. Sends their `Player` (name + a client‐generated `player_id` or `""`).
-    CreateRoom { player: Player },
+    CreateRoom {
+        player: Player,
+    },
 
     /// Client wants to join an existing room: the `room_id` and their `Player` (with `player_id=""` if they don’t have one yet).
-    JoinRoom { room_id: RoomId, player: Player },
+    JoinRoom {
+        room_id: RoomId,
+        player: Player,
+    },
 
     /// Only the room’s owner can issue this once everyone has joined.
     /// Server will generate and broadcast a `BoardData`.
-    StartGame { room_id: RoomId },
+    StartGame {
+    },
 
     /// Whenever a client clears some apples, it reports how many it just cleared.
     ScoreUpdate {
-        room_id: RoomId,
-        player_id: PlayerId,
+        // room_id: RoomId,
+        // player_id: PlayerId,
         cleared_count: u32,
+    },
+
+    ReadyUp {
+        ready: bool,
     },
 
     /// Player sends a chat message to everyone in the room.
     ChatMessage {
-        room_id: RoomId,
-        player_id: PlayerId,
+        // room_id: RoomId,
+        // player_id: PlayerId,
         message: String,
     },
 }
@@ -66,17 +78,17 @@ pub enum WsServerMsg {
     /// A new room was created. Server returns the `room_id` and the `Player` (with assigned `player_id`).
     RoomCreated { room_id: RoomId },
 
-    /// Broadcast to that client (and any later joiners) the full current room info:
-    /// room ID and the list of current players (their `Player` structs).
-    JoinedRoom {
-        room_id: RoomId,
-        players: Vec<Player>,
-    },
-
+    // /// Broadcast to that client (and any later joiners) the full current room info:
+    // /// room ID and the list of current players (their `Player` structs).
+    // JoinedRoom {
+    //     room_id: RoomId,
+    //     players: Vec<Player>,
+    // },
     /// Broadcast whenever anyone joins or leaves so UIs can update their lobby list.
     RoomPlayersUpdate {
         room_id: RoomId,
         players: Vec<Player>,
+        owner_id: PlayerId, // who is the room owner
     },
 
     /// Sent once when the owner hits “Start Game.” Contains an array of 170 u8s (1..=9).

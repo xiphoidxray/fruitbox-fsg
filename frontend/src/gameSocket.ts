@@ -6,20 +6,10 @@ import type {
 } from "./types/ws";
 import toast from "react-hot-toast";
 
-// interface GameState {
-//   roomId: string | null;
-//   players: Player[];
-//   board: number[];
-//   scores: Record<string, number>;
-//   timer: number;
-//   error: string | null;
-//   myId: string | null;
-// }
-
 /**
  * Custom hook that:
  * - opens a WebSocket to ws://<host>/ws
- * - sends CreateRoom/JoinRoom/StartGame/ScoreUpdate
+ * - sends CreateRoom/JoinRoom/StartGame/ScoreUpdate/ReadyUp
  * - listens for RoomCreated, JoinedRoom, RoomPlayersUpdate, GameStarted,
  *   TimerTick, LeaderboardUpdate, Error
  */
@@ -37,13 +27,15 @@ export function useGameSocket(displayName: string) {
     { playerId: string; name: string; text: string }[]
   >([]);
   const [top10Scores, setTop10Scores] = useState<{ name: string; score: number }[]>([]);
-
+  const [ownerId, setOwnerId] = useState<string | null>(null);
 
   useEffect(() => {
     // src/gameSocket.ts
     const wsProtocol = window.location.protocol === "https:" ? "wss" : "ws";
-    const wsUrl = `${wsProtocol}://${window.location.host}/ws`;
-    // const wsUrl = `${wsProtocol}://127.0.0.1:3123/ws`;
+    const isDev = import.meta.env.DEV;
+    const wsUrl = isDev
+      ? `${wsProtocol}://127.0.0.1:3123/ws`
+      : `${wsProtocol}://${window.location.host}/ws`;
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 
@@ -64,24 +56,13 @@ export function useGameSocket(displayName: string) {
       switch (msg.type) {
         case "RoomCreated": {
           setRoomId(msg.data.room_id);
-          // If server ever sends back a Player with ID, we'd set it here
-          // But in our current server code, RoomCreated only has room_id:
-          // We set myId from Join or from the original Player we passed in.
-          break;
-        }
-
-        case "JoinedRoom": {
-          setRoomId(msg.data.room_id);
-          setPlayers(msg.data.players);
-          // Find "my" ID from the returned players list
-          // Assuming displayName is unique in that room:
-          //   const me = msg.data.players.find((p) => p.name === displayName);
-          //   if (me) setMyId(me.player_id);
           break;
         }
 
         case "RoomPlayersUpdate": {
+          setRoomId(msg.data.room_id);
           setPlayers(msg.data.players);
+          setOwnerId(msg.data.owner_id);
           break;
         }
 
@@ -151,7 +132,8 @@ export function useGameSocket(displayName: string) {
   /** Send CreateRoom */
   function createRoom() {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
-    const player: Player = { player_id: myId, name: displayName };
+    // the owner is always ready
+    const player: Player = { player_id: myId, name: displayName, ready: true };
     const m: WsClientMsg = { type: "CreateRoom", data: { player } };
     wsRef.current.send(JSON.stringify(m));
   }
@@ -159,15 +141,22 @@ export function useGameSocket(displayName: string) {
   /** Send JoinRoom */
   function joinRoom(rid: string) {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
-    const player: Player = { player_id: myId, name: displayName };
+    const player: Player = { player_id: myId, name: displayName, ready: false };
     const m: WsClientMsg = { type: "JoinRoom", data: { room_id: rid, player } };
+    wsRef.current.send(JSON.stringify(m));
+  }
+
+  /** Send ReadyUp */
+  function readyUp(ready: boolean) {
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+    const m: WsClientMsg = { type: "ReadyUp", data: { ready } };
     wsRef.current.send(JSON.stringify(m));
   }
 
   /** Send StartGame */
   function startGame() {
     if (!wsRef.current || !roomId) return;
-    const m: WsClientMsg = { type: "StartGame", data: { room_id: roomId } };
+    const m: WsClientMsg = { type: "StartGame", data: {} };
     wsRef.current.send(JSON.stringify(m));
   }
 
@@ -178,8 +167,6 @@ export function useGameSocket(displayName: string) {
     const m: WsClientMsg = {
       type: "ScoreUpdate",
       data: {
-        room_id: roomId,
-        player_id: myId,
         cleared_count: cleared,
       },
     };
@@ -191,8 +178,6 @@ export function useGameSocket(displayName: string) {
     const m: WsClientMsg = {
       type: "ChatMessage",
       data: {
-        room_id: roomId,
-        player_id: myId,
         message: text,
       },
     };
@@ -214,11 +199,13 @@ export function useGameSocket(displayName: string) {
     myId,
     createRoom,
     joinRoom,
+    readyUp, // Add readyUp to the returned object
     startGame,
     reportScore,
     chatMessages,
     sendChatMessage,
     top10Scores,
     clearError,
+    ownerId,
   };
 }

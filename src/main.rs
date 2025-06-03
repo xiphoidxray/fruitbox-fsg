@@ -47,6 +47,30 @@ impl ConnContext {
     }
 }
 
+impl ConnContext {
+    pub fn require_room_and_player<'a>(
+        &'a self,
+    ) -> Result<(&'a RoomId, &'a PlayerId), WsServerMsg> {
+        let room_id = self
+            .joined_room
+            .as_ref()
+            .ok_or_else(|| WsServerMsg::Error {
+                room_id: None,
+                msg: "Not in a room".to_string(),
+            })?;
+
+        let player_id = self
+            .my_player_id
+            .as_ref()
+            .ok_or_else(|| WsServerMsg::Error {
+                room_id: Some(room_id.clone()),
+                msg: "Player ID not assigned".to_string(),
+            })?;
+
+        Ok((room_id, player_id))
+    }
+}
+
 #[tokio::main]
 async fn main() {
     tracing_subscriber::registry()
@@ -195,7 +219,10 @@ async fn handle_connection(mut ws: WebSocket, state: AppState) {
                 if let Message::Text(txt) = msg {
                     match serde_json::from_str::<WsClientMsg>(&txt) {
                         Ok(client_msg) => {
-                            handle_client_msg(client_msg, &mut ctx, &state, &mut ws).await;
+                            if let Err(err) = handle_client_msg(client_msg, &mut ctx, &state, &mut ws).await {
+                                let text = serde_json::to_string(&err).unwrap();
+                                let _ = ws.send(Message::Text(text.into())).await;
+                            };
                         }
                         Err(e) => {
                             let err = WsServerMsg::Error {
@@ -229,7 +256,7 @@ async fn handle_client_msg(
     ctx: &mut ConnContext,
     state: &AppState,
     ws: &mut WebSocket,
-) {
+) -> Result<(), WsServerMsg> {
     // println!("got client msg: {:?}", client_msg);
     match client_msg {
         WsClientMsg::CreateRoom { player } => {
@@ -239,6 +266,7 @@ async fn handle_client_msg(
             // 2) Create a fresh RoomState and insert it into global AppState
             let mut rooms = state.rooms.lock().await;
             let mut room_state = RoomState::new(player.clone());
+            let owner_id = room_state.owner.clone();
             room_state.scores.insert(player.player_id.clone(), 0);
             let rx = room_state.tx.subscribe();
             rooms.insert(room_id.clone(), room_state);
@@ -256,9 +284,10 @@ async fn handle_client_msg(
             let created = WsServerMsg::RoomCreated {
                 room_id: room_id.clone(),
             };
-            let joined = WsServerMsg::JoinedRoom {
+            let joined = WsServerMsg::RoomPlayersUpdate {
                 room_id: room_id.clone(),
                 players: vec![player.clone()],
+                owner_id,
             };
             let _ = ws
                 .send(Message::Text(
@@ -270,6 +299,7 @@ async fn handle_client_msg(
                     serde_json::to_string(&joined).unwrap().into(),
                 ))
                 .await;
+            Ok(())
         }
 
         WsClientMsg::JoinRoom { room_id, player } => {
@@ -278,15 +308,10 @@ async fn handle_client_msg(
             let player_id = player.player_id.clone();
             if let Some(room_state) = rooms.get_mut(&room_id) {
                 if room_state.players.contains_key(&player_id) {
-                    // Already in room → error
-                    let err = WsServerMsg::Error {
+                    return Err(WsServerMsg::Error {
                         room_id: Some(room_id.clone()),
                         msg: "Already in room".to_string(),
-                    };
-                    let _ = ws
-                        .send(Message::Text(serde_json::to_string(&err).unwrap().into()))
-                        .await;
-                    return;
+                    });
                 }
                 // 2) Insert into room’s player list and reset their score
                 room_state.players.insert(player_id.clone(), player.clone());
@@ -300,9 +325,11 @@ async fn handle_client_msg(
 
                 // 4) Broadcast updated player list
                 let players: Vec<_> = room_state.players.values().cloned().collect();
+                let owner_id = room_state.owner.clone();
                 let msg = WsServerMsg::RoomPlayersUpdate {
                     room_id: room_id.clone(),
                     players: players.clone(),
+                    owner_id: room_state.owner.clone(),
                 };
                 let _ = room_state.tx.send(msg);
                 drop(rooms);
@@ -316,9 +343,10 @@ async fn handle_client_msg(
                 println!("{} joined room {}", player.name, room_id);
 
                 // 6) Acknowledge to the joining client
-                let joined_msg = WsServerMsg::JoinedRoom {
+                let joined_msg = WsServerMsg::RoomPlayersUpdate {
                     room_id: room_id.clone(),
                     players,
+                    owner_id,
                 };
                 let _ = ws
                     .send(Message::Text(
@@ -327,30 +355,71 @@ async fn handle_client_msg(
                     .await;
             } else {
                 // Room doesn’t exist
-                let err = WsServerMsg::Error {
+                return Err(WsServerMsg::Error {
                     room_id: Some(room_id.clone()),
                     msg: "Room not found".to_string(),
-                };
-                let _ = ws
-                    .send(Message::Text(serde_json::to_string(&err).unwrap().into()))
-                    .await;
+                });
             }
+            Ok(())
+        }
+        WsClientMsg::ReadyUp { ready } => {
+            let mut rooms = state.rooms.lock().await;
+            let (room_id, player_id) = ctx.require_room_and_player()?;
+
+            // Get the room
+            let Some(room_state) = rooms.get_mut(room_id) else {
+                return Err(WsServerMsg::Error {
+                    room_id: Some(room_id.clone()),
+                    msg: "Room not found".to_string(),
+                });
+            };
+
+            // Get the player
+            let Some(player) = room_state.players.get_mut(player_id) else {
+                return Err(WsServerMsg::Error {
+                    room_id: Some(room_id.clone()),
+                    msg: "You are not in a room".to_string(),
+                });
+            };
+
+            // Update ready status
+            player.ready = ready;
+            println!("{} is now ready: {}", player.name, ready);
+
+            // Broadcast updated player list + owner ID
+            let players: Vec<_> = room_state.players.values().cloned().collect();
+            let msg = WsServerMsg::RoomPlayersUpdate {
+                room_id: room_id.clone(),
+                players,
+                owner_id: room_state.owner.clone(),
+            };
+            let _ = room_state.tx.send(msg);
+            Ok(())
         }
 
-        WsClientMsg::StartGame { room_id } => {
+        WsClientMsg::StartGame {} => {
             // 1) Only the owner may start
             let mut rooms = state.rooms.lock().await;
-            if let Some(room_state) = rooms.get_mut(&room_id) {
+            let (room_id, _) = ctx.require_room_and_player()?;
+            if let Some(room_state) = rooms.get_mut(room_id) {
                 let caller = ctx.my_player_id.as_ref().unwrap();
                 if *caller != room_state.owner {
-                    let err = WsServerMsg::Error {
+                    return Err(WsServerMsg::Error {
                         room_id: Some(room_id.clone()),
                         msg: "Only owner can start".to_string(),
-                    };
-                    let _ = ws
-                        .send(Message::Text(serde_json::to_string(&err).unwrap().into()))
-                        .await;
-                    return;
+                    });
+                }
+                // Check if all players are ready
+                let all_ready = room_state
+                    .players
+                    .values()
+                    .filter(|&p| p.player_id != room_state.owner)
+                    .all(|p| p.ready);
+                if !all_ready {
+                    return Err(WsServerMsg::Error {
+                        room_id: Some(room_id.clone()),
+                        msg: "All players must be ready".to_string(),
+                    });
                 }
 
                 let name = room_state
@@ -387,6 +456,17 @@ async fn handle_client_msg(
                     board: board.clone(),
                     duration_secs: GAME_DURATION_SECS,
                 };
+                // make all players other than the owner un ready
+                for player in room_state.players.values_mut() {
+                    player.ready = false;
+                }
+                let players: Vec<_> = room_state.players.values().cloned().collect();
+                let msg = WsServerMsg::RoomPlayersUpdate {
+                    room_id: room_id.clone(),
+                    players,
+                    owner_id: room_state.owner.clone(),
+                };
+                let _ = room_state.tx.send(msg);
                 let _ = room_state.tx.send(start_msg);
 
                 // 6) Spawn a countdown task that also updates global top-10 when finished
@@ -409,10 +489,10 @@ async fn handle_client_msg(
                         let mut top_10 = top_10_arc.lock().await;
                         let mut rooms = rooms_clone.lock().await;
 
-                        if let Some(room_state) = rooms.get_mut(&room_id) {
+                        if let Some(room_state) = rooms.get_mut(&room_clone) {
                             println!(
                                 "Game timer for room {} finished, scores: {:?}",
-                                room_id, room_state.scores
+                                room_clone, room_state.scores
                             );
 
                             let mut changed = false;
@@ -455,24 +535,18 @@ async fn handle_client_msg(
                     .send(Message::Text(serde_json::to_string(&err).unwrap().into()))
                     .await;
             }
+            Ok(())
         }
 
-        WsClientMsg::ScoreUpdate {
-            room_id,
-            player_id,
-            cleared_count,
-        } => {
+        WsClientMsg::ScoreUpdate { cleared_count } => {
+            let (room_id, player_id) = ctx.require_room_and_player()?;
             let mut rooms = state.rooms.lock().await;
-            if let Some(room_state) = rooms.get_mut(&room_id) {
-                if !room_state.players.contains_key(&player_id) {
-                    let err = WsServerMsg::Error {
+            if let Some(room_state) = rooms.get_mut(room_id) {
+                if !room_state.players.contains_key(player_id) {
+                    return Err(WsServerMsg::Error {
                         room_id: Some(room_id.clone()),
                         msg: "Not in room".to_string(),
-                    };
-                    let _ = ws
-                        .send(Message::Text(serde_json::to_string(&err).unwrap().into()))
-                        .await;
-                    return;
+                    });
                 }
 
                 // 1) Update this player’s score in the room
@@ -480,7 +554,7 @@ async fn handle_client_msg(
                 *entry += cleared_count;
 
                 // 2) Debug print: who scored how much
-                if let Some(player) = room_state.players.get(&player_id) {
+                if let Some(player) = room_state.players.get(player_id) {
                     println!("{} scored {}, total {}", player.name, cleared_count, entry);
                 }
 
@@ -497,40 +571,21 @@ async fn handle_client_msg(
                 let _ = room_state.tx.send(lb_msg);
                 drop(rooms);
             } else {
-                let err = WsServerMsg::Error {
+                return Err(WsServerMsg::Error {
                     room_id: Some(room_id.clone()),
                     msg: "Room not found".to_string(),
-                };
-                let _ = ws
-                    .send(Message::Text(serde_json::to_string(&err).unwrap().into()))
-                    .await;
+                });
             }
+            Ok(())
         }
 
-        WsClientMsg::ChatMessage {
-            room_id,
-            player_id: _,
-            message,
-        } => {
-            // 1) Must have a PlayerId in context
-            let player_id = match &ctx.my_player_id {
-                Some(pid) => pid.clone(),
-                None => {
-                    let err = WsServerMsg::Error {
-                        room_id: Some(room_id.clone()),
-                        msg: "Player not identified".to_string(),
-                    };
-                    let _ = ws
-                        .send(Message::Text(serde_json::to_string(&err).unwrap().into()))
-                        .await;
-                    return;
-                }
-            };
+        WsClientMsg::ChatMessage { message } => {
+            let (room_id, player_id) = ctx.require_room_and_player()?;
 
             // 2) Broadcast the chat to everyone in the room
             let mut rooms = state.rooms.lock().await;
-            if let Some(room_state) = rooms.get_mut(&room_id) {
-                if let Some(player) = room_state.players.get(&player_id) {
+            if let Some(room_state) = rooms.get_mut(room_id) {
+                if let Some(player) = room_state.players.get(player_id) {
                     let chat_msg = WsServerMsg::ChatBroadcast {
                         room_id: room_id.clone(),
                         player: player.clone(),
@@ -539,22 +594,17 @@ async fn handle_client_msg(
                     println!("{} send chat message: {}", player.name, message);
                     let _ = room_state.tx.send(chat_msg);
                 } else {
-                    let err = WsServerMsg::Error {
+                    return Err(WsServerMsg::Error {
                         room_id: Some(room_id.clone()),
                         msg: "You are not a player in this room".to_string(),
-                    };
-                    let _ = ws
-                        .send(Message::Text(serde_json::to_string(&err).unwrap().into()))
-                        .await;
+                    });
                 }
+                Ok(())
             } else {
-                let err = WsServerMsg::Error {
+                return Err(WsServerMsg::Error {
                     room_id: Some(room_id.clone()),
                     msg: "Room not found".to_string(),
-                };
-                let _ = ws
-                    .send(Message::Text(serde_json::to_string(&err).unwrap().into()))
-                    .await;
+                });
             }
         }
     }
@@ -578,19 +628,9 @@ async fn remove_player_from_room(room_id: &RoomId, player_id: &PlayerId, state: 
         let msg = WsServerMsg::RoomPlayersUpdate {
             room_id: room_id.clone(),
             players,
+            owner_id: room_state.owner.clone(),
         };
         let _ = room_state.tx.send(msg);
-
-        // If owner left, you could pick a new one or close the room entirely:
-        if &room_state.owner == player_id {
-            // e.g. reassign or clean up:
-            // let new_owner = room_state.players.iter().next().map(|(_, p)| p.player_id.clone());
-            // room_state.owner = new_owner.unwrap_or_default();
-            println!(
-                "Owner {} left room {}, removing room.",
-                player_name, room_id
-            );
-        }
 
         // If no players remain, destroy the room (and cancel timer)
         if room_state.players.is_empty() {
@@ -599,6 +639,16 @@ async fn remove_player_from_room(room_id: &RoomId, player_id: &PlayerId, state: 
             }
             println!("Room {} is empty, removing it.", room_id);
             rooms.remove(room_id);
+        }
+        // If owner left, you could pick a new one or close the room entirely:
+        else if &room_state.owner == player_id {
+            // e.g. reassign or clean up:
+            let new_owner = room_state.players.iter().next().map(|(_, p)| p.player_id.clone());
+            room_state.owner = new_owner.unwrap_or_default();
+            println!(
+                "Owner {} left room {}, removing room.",
+                player_name, room_id
+            );
         }
     }
 }

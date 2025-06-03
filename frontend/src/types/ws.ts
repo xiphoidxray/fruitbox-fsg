@@ -11,14 +11,18 @@ player_id: string,
 /**
  * The display name the player typed in (e.g. “Alice”).
  */
-name: string, };
+name: string, 
+/**
+ * Whether if the player is ready for the current game to start.
+ */
+ready: boolean, };
 
 /**
  * All messages the **front end** can send to the server.
  */
-export type WsClientMsg = { "type": "CreateRoom", "data": { player: Player, } } | { "type": "JoinRoom", "data": { room_id: string, player: Player, } } | { "type": "StartGame", "data": { room_id: string, } } | { "type": "ScoreUpdate", "data": { room_id: string, player_id: string, cleared_count: number, } } | { "type": "ChatMessage", "data": { room_id: string, player_id: string, message: string, } };
+export type WsClientMsg = { "type": "CreateRoom", "data": { player: Player, } } | { "type": "JoinRoom", "data": { room_id: string, player: Player, } } | { "type": "StartGame", "data": Record<string, never> } | { "type": "ScoreUpdate", "data": { cleared_count: number, } } | { "type": "ReadyUp", "data": { ready: boolean, } } | { "type": "ChatMessage", "data": { message: string, } };
 
 /**
  * All messages the **server** can push back to every client in a room.
  */
-export type WsServerMsg = { "type": "RoomCreated", "data": { room_id: string, } } | { "type": "JoinedRoom", "data": { room_id: string, players: Array<Player>, } } | { "type": "RoomPlayersUpdate", "data": { room_id: string, players: Array<Player>, } } | { "type": "GameStarted", "data": { room_id: string, board: Array<number>, duration_secs: bigint, } } | { "type": "TimerTick", "data": { room_id: string, remaining_secs: bigint, } } | { "type": "LeaderboardUpdate", "data": { room_id: string, scores: Array<[string, number]>, } } | { "type": "ChatBroadcast", "data": { room_id: string, player: Player, message: string, } } | { "type": "Error", "data": { room_id: string | null, msg: string, } } | { "type": "Top10Scores", "data": { scores: Array<[number, string]>, } };
+export type WsServerMsg = { "type": "RoomCreated", "data": { room_id: string, } } | { "type": "RoomPlayersUpdate", "data": { room_id: string, players: Array<Player>, owner_id: string, } } | { "type": "GameStarted", "data": { room_id: string, board: Array<number>, duration_secs: bigint, } } | { "type": "TimerTick", "data": { room_id: string, remaining_secs: bigint, } } | { "type": "LeaderboardUpdate", "data": { room_id: string, scores: Array<[string, number]>, } } | { "type": "ChatBroadcast", "data": { room_id: string, player: Player, message: string, } } | { "type": "Error", "data": { room_id: string | null, msg: string, } } | { "type": "Top10Scores", "data": { scores: Array<[number, string]>, } };
