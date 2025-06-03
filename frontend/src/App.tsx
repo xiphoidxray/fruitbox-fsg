@@ -112,7 +112,7 @@ export default function App() {
                     alt="Apple"
                     className="w-20 h-20"
                   />
-                  <h1 className="text-7xl font-bold text-red-500 drop-shadow-lg font-[Pacifico]">
+                  <h1 className=" text-7xl font-bold text-red-500 drop-shadow-lg font-[Pacifico]">
                     Fruitbox
                   </h1>
                   <h1 className="text-7xl font-bold text-green-500 drop-shadow-lg font-[Pacifico]">

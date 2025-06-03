@@ -260,8 +260,8 @@ async fn handle_client_msg(
     // println!("got client msg: {:?}", client_msg);
     match client_msg {
         WsClientMsg::CreateRoom { player } => {
-            // 1) Generate a new random RoomId (UUID string)
-            let room_id = uuid::Uuid::new_v4().to_string();
+            // gen 4 digit number
+            let room_id = format!("{:04}", rand::random::<u16>() % 10000);
 
             // 2) Create a fresh RoomState and insert it into global AppState
             let mut rooms = state.rooms.lock().await;
