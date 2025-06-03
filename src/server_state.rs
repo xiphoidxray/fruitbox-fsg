@@ -13,7 +13,7 @@ use tokio::{
 };
 
 /// How long (in seconds) the game runs after StartGame.
-pub const GAME_DURATION_SECS: u64 = 120;
+pub const GAME_DURATION_SECS: u64 = 15;
 
 /// Represents everything the server needs to know about a single lobby/room.
 #[derive(Debug)]
