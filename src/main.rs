@@ -477,7 +477,7 @@ async fn handle_client_msg(
                 let handle = tokio::spawn(async move {
                     for sec_left in (0..=GAME_DURATION_SECS).rev() {
                         let tick = WsServerMsg::TimerTick {
-                            room_id: room_clone.clone(),
+                            // room_id: room_clone.clone(),
                             remaining_secs: sec_left,
                         };
                         let _ = tx_clone.send(tick);
@@ -611,7 +611,7 @@ async fn handle_client_msg(
 }
 
 /// If a client disconnects without properly leaving the room, remove them from that room's state.
-/// If they were the owner, you could optionally dissolve the room or reassign ownership.
+/// Broadcasts the updated player list and (new) owner ID to remaining players.
 async fn remove_player_from_room(room_id: &RoomId, player_id: &PlayerId, state: &AppState) {
     let mut rooms = state.rooms.lock().await;
     if let Some(room_state) = rooms.get_mut(room_id) {
@@ -620,35 +620,41 @@ async fn remove_player_from_room(room_id: &RoomId, player_id: &PlayerId, state: 
             .get(player_id)
             .map_or("Unknown player", |p| p.name.as_str())
             .to_owned();
+
+        // Remove player from players and scores
         room_state.players.remove(player_id);
         room_state.scores.remove(player_id);
 
-        // Broadcast new player list
-        let players: Vec<_> = room_state.players.values().cloned().collect();
-        let msg = WsServerMsg::RoomPlayersUpdate {
-            room_id: room_id.clone(),
-            players,
-            owner_id: room_state.owner.clone(),
-        };
-        let _ = room_state.tx.send(msg);
-
-        // If no players remain, destroy the room (and cancel timer)
+        // If room is now empty, clean up entirely
         if room_state.players.is_empty() {
             if let Some(handle) = room_state.timer_handle.take() {
                 let _ = handle.abort();
             }
             println!("Room {} is empty, removing it.", room_id);
             rooms.remove(room_id);
+            return;
         }
-        // If owner left, you could pick a new one or close the room entirely:
-        else if &room_state.owner == player_id {
-            // e.g. reassign or clean up:
-            let new_owner = room_state.players.iter().next().map(|(_, p)| p.player_id.clone());
-            room_state.owner = new_owner.unwrap_or_default();
-            println!(
-                "Owner {} left room {}, removing room.",
-                player_name, room_id
-            );
+
+        // If owner left, assign a new owner (first player in the map)
+        if &room_state.owner == player_id {
+            if let Some((_, new_owner)) = room_state.players.iter().next() {
+                println!(
+                    "Owner {} left room {}. New owner is {}.",
+                    player_name, room_id, new_owner.name
+                );
+                room_state.owner = new_owner.player_id.clone();
+            }
         }
+
+        // Broadcast updated players list + owner ID
+        let players: Vec<_> = room_state.players.values().cloned().collect();
+        let update_msg = WsServerMsg::RoomPlayersUpdate {
+            room_id: room_id.clone(),
+            players,
+            owner_id: room_state.owner.clone(),
+        };
+        let _ = room_state.tx.send(update_msg);
+
+        println!("Player {} left room {}.", player_name, room_id);
     }
 }

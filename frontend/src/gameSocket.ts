@@ -21,7 +21,6 @@ export function useGameSocket(displayName: string) {
   const [board, setBoard] = useState<number[]>([]);
   const [scores, setScores] = useState<Record<string, number>>({});
   const [timer, setTimer] = useState(0);
-  const [error, setError] = useState<string | null>(null);
   const [myId] = useState<string>(() => crypto.randomUUID());
   const [chatMessages, setChatMessages] = useState<
     { playerId: string; name: string; text: string }[]
@@ -102,7 +101,6 @@ export function useGameSocket(displayName: string) {
         }
 
         case "Error": {
-          setError(msg.data.msg);
           toast.error(msg.data.msg);
           break;
         }
@@ -184,18 +182,12 @@ export function useGameSocket(displayName: string) {
     wsRef.current.send(JSON.stringify(m));
   }
 
-  /** Clear the current error */
-  function clearError() {
-    setError(null);
-  }
-
   return {
     roomId,
     players,
     board,
     scores,
     timer,
-    error,
     myId,
     createRoom,
     joinRoom,
@@ -205,7 +197,6 @@ export function useGameSocket(displayName: string) {
     chatMessages,
     sendChatMessage,
     top10Scores,
-    clearError,
     ownerId,
   };
 }

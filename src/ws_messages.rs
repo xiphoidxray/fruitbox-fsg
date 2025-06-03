@@ -100,7 +100,7 @@ pub enum WsServerMsg {
 
     /// Sent once per second so clients can update their countdown timer.
     TimerTick {
-        room_id: RoomId,
+        // room_id: RoomId,
         remaining_secs: u64,
     },
 

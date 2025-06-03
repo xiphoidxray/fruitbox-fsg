@@ -7,9 +7,79 @@ import { Toaster } from "react-hot-toast";
 import appleImage from "./applev2.png"; // adjust path as needed
 import appleHighlightedImage from "./applev2-highlighted.png"; // highlighted apple image
 
+// Game End Popup Component
+function GameEndPopup({ isOpen, onClose, myScore, topPlayers, myName } : any) {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-2xl p-8 max-w-md w-full mx-4 shadow-2xl border-4 border-green-300">
+        {/* Header */}
+        <div className="text-center mb-6">
+          <h2 className="text-3xl font-bold text-green-800 mb-2">🎉 Game Over! 🎉</h2>
+          <div className="bg-green-100 px-6 py-3 rounded-lg border-2 border-green-300">
+            <p className="text-lg font-bold text-green-700">Your Score</p>
+            <p className="text-4xl font-bold text-red-600">{myScore}</p>
+          </div>
+        </div>
+
+        {/* Top 3 Players */}
+        <div className="mb-6">
+          <h3 className="text-xl font-bold text-green-800 text-center mb-4">🏆 Top 3 Players</h3>
+          <div className="space-y-3">
+            {topPlayers.slice(0, 3).map((player: any, index : any) => (
+              <div
+                key={index}
+                className={`flex items-center justify-between p-4 rounded-lg shadow-sm transform hover:scale-105 transition-transform duration-200 ${
+                  player.name === myName
+                    ? "bg-yellow-100 border-2 border-yellow-400 ring-2 ring-yellow-300"
+                    : index === 0
+                    ? "bg-red-100 border-2 border-red-300"
+                    : index === 1
+                    ? "bg-green-100 border-2 border-green-300"
+                    : "bg-orange-100 border-2 border-orange-300"
+                }`}
+              >
+                <div className="flex items-center space-x-3">
+                  <span className="text-2xl">
+                    {index === 0 ? "🥇" : index === 1 ? "🥈" : "🥉"}
+                  </span>
+                  <div>
+                    <span className="font-bold text-gray-800">
+                      {player.name}
+                      {player.name === myName && (
+                        <span className="text-yellow-600 text-sm ml-2">(You!)</span>
+                      )}
+                    </span>
+                  </div>
+                </div>
+                <div className="bg-white px-4 py-2 rounded-full shadow-sm border">
+                  <span className="font-bold text-gray-800">{player.score}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Close Button */}
+        <div className="text-center">
+          <button
+            onClick={onClose}
+            className="bg-green-500 hover:bg-green-600 text-white font-bold px-8 py-3 rounded-full shadow-lg transform hover:scale-105 transition-all duration-200"
+          >
+            Continue
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [name] = useState<string>(() => prompt("Enter your name")?.trim() || "anon");
   const [joinInput, setJoinInput] = useState("");
+  const [showGameEndPopup, setShowGameEndPopup] = useState(false);
+  const [gameEndData, setGameEndData] = useState<{ myScore: number; topPlayers: { name: string; score: number }[] }>({ myScore: 0, topPlayers: [] });
 
   const {
     roomId,
@@ -17,7 +87,6 @@ export default function App() {
     board,
     scores,
     timer,
-    error,
     createRoom,
     joinRoom,
     readyUp, // Add readyUp from useGameSocket
@@ -27,20 +96,49 @@ export default function App() {
     chatMessages,
     sendChatMessage,
     top10Scores,
-    clearError,
     ownerId,
   } = useGameSocket(name);
 
-  // Auto-dismiss error after 1.5 seconds
-  useEffect(() => {
-    if (error) {
-      const timeoutId = setTimeout(() => {
-        clearError();
-      }, 1500);
+  // Track previous timer value to detect when game actually ends
+  const [prevTimer, setPrevTimer] = useState<number|null>(null);
+  const [gameHasEnded, setGameHasEnded] = useState(false);
 
-      return () => clearTimeout(timeoutId);
+  // Check for game end (when timer reaches 0 from a positive number)
+  useEffect(() => {
+    if (roomId && board.length > 0) {
+      // Game just ended if timer is 0 and previous timer was > 0
+      if (timer === 0 && prevTimer! > 0 && !gameHasEnded) {
+        setGameHasEnded(true);
+        
+        // Game has ended, prepare popup data
+        const myScore = scores[myId] || 0;
+        
+        // Create sorted array of players with scores
+        const playersWithScores = players.map(player => ({
+          name: player.name,
+          score: scores[player.player_id] || 0
+        })).sort((a, b) => b.score - a.score);
+
+        setGameEndData({
+          myScore,
+          topPlayers: playersWithScores
+        });
+        
+        // Show popup after a short delay to let the timer update
+        setTimeout(() => {
+          setShowGameEndPopup(true);
+        }, 500);
+      }
+      
+      // Reset game end flag when a new game starts (timer goes from 0 to positive)
+      if (timer > 0 && prevTimer === 0) {
+        setGameHasEnded(false);
+      }
     }
-  }, [error, clearError]);
+    
+    // Update previous timer
+    setPrevTimer(timer);
+  }, [timer, roomId, board.length, scores, myId, players, prevTimer, gameHasEnded]);
 
   // Check if game is active (board has been set up)
   const isGameActive = roomId && board.length > 0;
@@ -317,6 +415,19 @@ export default function App() {
   return (
     <>
       <Toaster />
+      
+      {/* Game End Popup */}
+      <GameEndPopup
+        isOpen={showGameEndPopup}
+        onClose={() => {
+          setShowGameEndPopup(false);
+          setGameHasEnded(false); // Reset the game ended flag
+        }}
+        myScore={gameEndData.myScore}
+        topPlayers={gameEndData.topPlayers}
+        myName={name}
+      />
+
       <div className="min-h-screen bg-white flex flex-col w-screen">
         {/* Compact Room Header */}
         <div className="bg-gray-50  border-gray-200 p-4">
