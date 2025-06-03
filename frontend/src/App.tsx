@@ -6,7 +6,7 @@ import Leaderboard from "./Leaderboard";
 import { Toaster } from "react-hot-toast";
 import appleImage from "./applev2.png"; // adjust path as needed
 import appleHighlightedImage from "./applev2-highlighted.png"; // highlighted apple image
-import GameEndPopup from "./popup";
+import GameEndPopup from "./Popup";
 
 
 export default function App() {
