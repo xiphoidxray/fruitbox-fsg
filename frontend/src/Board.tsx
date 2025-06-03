@@ -12,7 +12,7 @@ interface BoardProps {
 }
 
 /** 
- * We keep a local “AppleState” for each cell so that toggling `cleared` is a single
+ * We keep a local "AppleState" for each cell so that toggling `cleared` is a single
  * array‐map operation rather than a Set lookup per render.
  */
 type AppleState = {
@@ -64,15 +64,16 @@ export default function Board({
   const bboxRef = useRef<DOMRect | null>(null);
   const cellSizeRef = useRef<{ w: number; h: number }>({ w: 0, h: 0 });
 
-  /** Convert pointer event into board‐relative pixel coords. */
-  const relPos = (e: React.PointerEvent) => {
+  /** Convert pointer/touch event into board‐relative pixel coords. */
+  const relPos = (clientX: number, clientY: number) => {
     const box = boardRef.current!.getBoundingClientRect();
-    return { x: e.clientX - box.left, y: e.clientY - box.top };
+    return { x: clientX - box.left, y: clientY - box.top };
   };
 
   /** Begin drag: measure bounding box, compute cell size, and start a new rect. */
-  const onPointerDown = (e: React.PointerEvent) => {
-    if (disabled || e.button !== 0) return;
+  const startDrag = (clientX: number, clientY: number) => {
+    if (disabled) return;
+    
     const box = boardRef.current!.getBoundingClientRect();
     bboxRef.current = box;
     cellSizeRef.current = {
@@ -80,17 +81,16 @@ export default function Board({
       h: box.height / rows,
     };
 
-    const p = relPos(e);
+    const p = relPos(clientX, clientY);
     startPx.current = p;
     dragging.current = true;
     setRectPx({ x1: p.x, y1: p.y, x2: p.x, y2: p.y });
-    (e.target as HTMLElement).setPointerCapture(e.pointerId);
   };
 
-  /** Update rect as the user drags. We do not re‐measure the board here. */
-  const onPointerMove = (e: React.PointerEvent) => {
+  /** Update rect as the user drags. */
+  const updateDrag = (clientX: number, clientY: number) => {
     if (!dragging.current || !startPx.current) return;
-    const p = relPos(e);
+    const p = relPos(clientX, clientY);
     setRectPx({
       x1: Math.min(startPx.current.x, p.x),
       y1: Math.min(startPx.current.y, p.y),
@@ -100,12 +100,12 @@ export default function Board({
   };
 
   /**
-   * On pointer up: 
-   * 1) Determine which apples’ centers are inside rectPx (skip already cleared). 
+   * On drag end: 
+   * 1) Determine which apples' centers are inside rectPx (skip already cleared). 
    * 2) Sum their values; if exactly 10, mark them all cleared in one setApples() call.
    * 3) Use requestAnimationFrame to clear the drag rectangle so React can batch updates.
    */
-  const onPointerUp = () => {
+  const endDrag = () => {
     if (!rectPx || !bboxRef.current) {
       dragging.current = false;
       return;
@@ -113,7 +113,7 @@ export default function Board({
 
     const { w: cellW, h: cellH } = cellSizeRef.current;
 
-    /** Return true if the apple’s center is inside current rectPx AND not yet cleared. */
+    /** Return true if the apple's center is inside current rectPx AND not yet cleared. */
     const isInside = (a: AppleState) => {
       if (a.cleared) return false;
       const cx = (a.x + 0.5) * cellW;
@@ -138,8 +138,7 @@ export default function Board({
       onClear(picked.length);
     }
 
-    // Hide the drag‐rectangle on the next animation frame, so React can
-    // batch the cleared‐apple update and the rectangle removal into one paint.
+    // Hide the drag‐rectangle on the next animation frame
     requestAnimationFrame(() => {
       setRectPx(null);
       dragging.current = false;
@@ -147,15 +146,76 @@ export default function Board({
     });
   };
 
+  // Mouse event handlers
+  const onMouseDown = (e: React.MouseEvent) => {
+    if (e.button !== 0) return; // Only left mouse button
+    startDrag(e.clientX, e.clientY);
+  };
+
+  const onMouseMove = (e: React.MouseEvent) => {
+    updateDrag(e.clientX, e.clientY);
+  };
+
+  const onMouseUp = () => {
+    endDrag();
+  };
+
+  // Touch event handlers
+  const onTouchStart = (e: React.TouchEvent) => {
+    e.preventDefault(); // Prevent scrolling while dragging
+    const touch = e.touches[0];
+    if (touch) {
+      startDrag(touch.clientX, touch.clientY);
+    }
+  };
+
+  const onTouchMove = (e: React.TouchEvent) => {
+    e.preventDefault(); // Prevent scrolling while dragging
+    const touch = e.touches[0];
+    if (touch) {
+      updateDrag(touch.clientX, touch.clientY);
+    }
+  };
+
+  const onTouchEnd = (e: React.TouchEvent) => {
+    e.preventDefault();
+    endDrag();
+  };
+
+  // Pointer event handlers (fallback for devices that support it)
+  const onPointerDown = (e: React.PointerEvent) => {
+    if (e.button !== 0) return;
+    startDrag(e.clientX, e.clientY);
+    (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+  };
+
+  const onPointerMove = (e: React.PointerEvent) => {
+    updateDrag(e.clientX, e.clientY);
+  };
+
+  const onPointerUp = () => {
+    endDrag();
+  };
+
   return (
     <div
       className="board"
       ref={boardRef}
+      // Mouse events
+      onMouseDown={onMouseDown}
+      onMouseMove={onMouseMove}
+      onMouseUp={onMouseUp}
+      // Touch events for mobile
+      onTouchStart={onTouchStart}
+      onTouchMove={onTouchMove}
+      onTouchEnd={onTouchEnd}
+      // Pointer events (modern browsers)
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
+      style={{ touchAction: 'none' }} // Prevent default touch behaviors
     >
-      {/** Render each apple. We only call getBoundingClientRect() here if rectPx != null. **/}
+      {/** Render each apple. **/}
       {apples.map((a, i) => {
         let selected = false;
         if (rectPx && !a.cleared && bboxRef.current) {

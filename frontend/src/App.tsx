@@ -16,7 +16,7 @@ function GameEndPopup({ isOpen, onClose, myScore, topPlayers, myName } : any) {
       <div className="bg-white rounded-2xl p-8 max-w-md w-full mx-4 shadow-2xl border-4 border-green-300">
         {/* Header */}
         <div className="text-center mb-6">
-          <h2 className="text-3xl font-bold text-green-800 mb-2">🎉 Game Over! 🎉</h2>
+          <h2 className="text-3xl font-bold text-green-800 mb-2">Game Over</h2>
           <div className="bg-green-100 px-6 py-3 rounded-lg border-2 border-green-300">
             <p className="text-lg font-bold text-green-700">Your Score</p>
             <p className="text-4xl font-bold text-red-600">{myScore}</p>
@@ -25,7 +25,7 @@ function GameEndPopup({ isOpen, onClose, myScore, topPlayers, myName } : any) {
 
         {/* Top 3 Players */}
         <div className="mb-6">
-          <h3 className="text-xl font-bold text-green-800 text-center mb-4">🏆 Top 3 Players</h3>
+          <h3 className="text-xl font-bold text-green-800 text-center mb-4">Top 3 Players</h3>
           <div className="space-y-3">
             {topPlayers.slice(0, 3).map((player: any, index : any) => (
               <div
