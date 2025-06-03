@@ -10,7 +10,16 @@ import appleHighlightedImage from "./applev2-highlighted.png"; // highlighted ap
 
 
 export default function App() {
-  const [name] = useState<string>(() => prompt("Enter your name")?.trim() || "anon");
+ const [name, setName] = useState<string>(() => {
+    // Try to get name from localStorage
+    const storedName = localStorage.getItem("playerName");
+    if (storedName) return storedName;
+
+    // If not found, prompt and save it
+    const enteredName = prompt("Enter your name")?.trim() || "anon";
+    localStorage.setItem("playerName", enteredName);
+    return enteredName;
+  });
   const [joinInput, setJoinInput] = useState("");
   const [showGameEndPopup, setShowGameEndPopup] = useState(false);
 
@@ -90,16 +99,6 @@ export default function App() {
             }}
           ></div>
 
-          <style>{`
-          @keyframes gradient {
-            0%, 100% {
-              background-position: 0% 50%;
-            }
-            50% {
-              background-position: 100% 50%;
-            }
-          }
-        `}</style>
 
           <div className="relative z-10 w-full max-w-6xl">
             {/* Main Title */}
