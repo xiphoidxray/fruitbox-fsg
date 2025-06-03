@@ -117,7 +117,7 @@ export default function App() {
                     Multiplayer
                   </h1>
                 </div>
-                <p className="text-lg text-green-700 font-medium">
+                <p className="text-lg text-green-700 font-medium font-[Space Mono]">
                   someone stop us 🙏
                 </p>
               </div>
@@ -282,7 +282,7 @@ export default function App() {
                           >
                             <div className="flex items-center space-x-2">
                               <span className="text-lg">
-                                {index === 0 ? "🥇" : index === 1 ? "🥈" : "🥉"}
+                                {index === 0 ? "🍎" : index === 1 ? "🍏" : "🍊"}
                               </span>
                               <span className="font-bold text-sm text-gray-800">
                                 {entry.name}
