@@ -101,7 +101,17 @@ async fn main() {
         )
         .with_state(state.clone());
 
-    let addr = SocketAddr::from(([127, 0, 0, 1], 3123));
+
+    // Determine the IP to bind to
+    let (bind_ip, port) = if std::env::var("RENDER").is_ok() {
+        // On Render, bind to 0.0.0.0
+        ([0, 0, 0, 0], 10000)
+    } else {
+        // Locally, bind to localhost only
+        ([127, 0, 0, 1], 3123)
+    };
+
+    let addr = SocketAddr::from((bind_ip, port));
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
 
     tracing::debug!("listening on {}", listener.local_addr().unwrap());
