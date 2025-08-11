@@ -18,6 +18,70 @@ use tower_http::{
     services::ServeDir,
     trace::{DefaultMakeSpan, TraceLayer},
 };
+use rand::prelude::*;
+use serde::Deserialize;
+use std::fs;
+use std::path::Path;
+use anyhow::Result;
+
+#[derive(Deserialize)]
+struct Combos {
+    data: Vec<[u8; 8]>,
+}
+
+fn load_combos_from_dir(dir: &str) -> Result<Vec<[u8; 8]>> {
+    let mut all_data = Vec::new();
+
+    let mut paths: Vec<_> = fs::read_dir(dir)?
+        .filter_map(|entry| entry.ok())
+        .map(|entry| entry.path())
+        .filter(|path| {
+            path.is_file() &&
+            path.file_name()
+                .map(|name| name.to_string_lossy().starts_with("combos_"))
+                .unwrap_or(false)
+        })
+        .collect();
+
+    paths.sort();
+
+    for path in paths {
+        let s = fs::read_to_string(&path)?;
+        let c: Combos = serde_json::from_str(&s)?;
+        all_data.extend(c.data);
+    }
+
+    Ok(all_data)
+}
+
+// fn load_combos(paths: &[&str]) -> anyhow::Result<Vec<[u8; 8]>> {
+//     let mut all_data = Vec::new();
+
+//     for path in paths {
+//         let s = fs::read_to_string(path)?;
+//         let c: Combos = serde_json::from_str(&s)?;
+//         all_data.extend(c.data);
+//     }
+
+//     Ok(all_data)
+// }
+
+fn generate_board(combos: &[[u8; 8]]) -> Vec<u8> {
+    let mut rng = thread_rng();
+    let counts = combos.choose(&mut rng).expect("no combos loaded");
+
+    let mut flat = Vec::with_capacity(LEN);
+    for (i, &cnt) in counts.iter().enumerate() {
+        flat.extend(std::iter::repeat((i as u8) + 1).take(cnt as usize));
+    }
+    if flat.len() < LEN {
+        flat.extend(std::iter::repeat(9u8).take(LEN - flat.len()));
+    }
+
+    flat.shuffle(&mut rng);
+    assert_eq!(flat.len(), LEN);
+    flat
+}
 
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -445,13 +509,10 @@ async fn handle_client_msg(
                 }
 
                 // 3) Generate a new random board
-                let mut board: BoardData = Vec::new();
-                for _y in 0..ROWS {
-                    for _x in 0..COLS {
-                        let val = 1 + rand::random::<u8>() % 9;
-                        board.push(val);
-                    }
-                }
+                let combos = load_combos_from_dir("./") 
+                    .expect("Failed to load combination counts");
+                let board = generate_board(&
+                    combos);
                 room_state.board = Some(board.clone());
                 println!("Generated new board for room {}: {:?}", room_id, board);
 
