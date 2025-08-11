@@ -28,61 +28,65 @@ export function useGameSocket(displayName: string) {
   const [top10Scores, setTop10Scores] = useState<{ name: string; score: number }[]>([]);
   const [ownerId, setOwnerId] = useState<string | null>(null);
 
-  useEffect(() => {
-    // src/gameSocket.ts
-    const wsProtocol = window.location.protocol === "https:" ? "wss" : "ws";
-    const isDev = import.meta.env.DEV;
-    const wsUrl = isDev
-      ? `${wsProtocol}://127.0.0.1:3123/ws`
-      : `${wsProtocol}://${window.location.host}/ws`;
-    const ws = new WebSocket(wsUrl);
-    wsRef.current = ws;
+useEffect(() => {
+  const wsProtocol = window.location.protocol === "https:" ? "wss" : "ws";
+  const wsUrl = `${wsProtocol}://${window.location.host}/ws`;
 
-    ws.onopen = () => {
-      console.log("WebSocket connected");
-    };
+  const globalAny = window as any;
 
-    ws.onmessage = (ev) => {
-      let msg: WsServerMsg;
-      try {
-        msg = JSON.parse(ev.data);
-      } catch (e) {
-        console.error("Invalid server message", e);
-        return;
-      }
+  // Create the global socket if it doesn't exist or is closed.
+  if (!globalAny.__FRUITBOX_WS || globalAny.__FRUITBOX_WS.readyState === WebSocket.CLOSED) {
+    const sock = new WebSocket(wsUrl);
+
+    sock.addEventListener("open", () => {
+      console.log("Global WebSocket connected");
+    });
+
+    sock.addEventListener("close", (ev) => {
+      console.log("Global WebSocket closed", ev.code, ev.reason);
+      globalAny.__FRUITBOX_WS = null;
+    });
+
+    sock.addEventListener("error", (ev) => {
+      console.error("Global WebSocket error", ev);
+    });
+
+    globalAny.__FRUITBOX_WS = sock;
+  }
+
+  // Point our ref at the global socket
+  wsRef.current = globalAny.__FRUITBOX_WS as WebSocket | null;
+
+  // per-hook handlers (so multiple components/hooks won't step on each other)
+  const onMessage = (ev: MessageEvent) => {
+    try {
+      const msg: WsServerMsg = JSON.parse(ev.data);
       console.log("Received message:", msg);
 
       switch (msg.type) {
-        case "RoomCreated": {
+        case "RoomCreated":
           setRoomId(msg.data.room_id);
           break;
-        }
 
-        case "RoomPlayersUpdate": {
+        case "RoomPlayersUpdate":
           setRoomId(msg.data.room_id);
           setPlayers(msg.data.players);
           setOwnerId(msg.data.owner_id);
           break;
-        }
 
-        case "GameStarted": {
+        case "GameStarted":
           setBoard(msg.data.board);
           setTimer(Number(msg.data.duration_secs));
-          // reset scores to zero:
-          const resetScores: Record<string, number> = {};
-          msg.data.board.forEach((_v, _i) => { }); // no-op, just demonstration
-          setScores(resetScores);
+          setScores({}); // keep previous behaviour: reset
           break;
-        }
 
-        case "TimerTick": {
+        case "TimerTick":
           setTimer(Number(msg.data.remaining_secs));
           break;
-        }
 
         case "LeaderboardUpdate": {
           const newScores: Record<string, number> = {};
-          msg.data.scores.forEach(([pid, sc]) => {
+          msg.data.scores.forEach(([pid, sc]: [string, number]) => {
             newScores[pid] = sc;
           });
           setScores(newScores);
@@ -90,8 +94,6 @@ export function useGameSocket(displayName: string) {
         }
 
         case "ChatBroadcast": {
-          console.log("Got broadcast", msg.data);
-
           const { player, message } = msg.data;
           setChatMessages((prev) => [
             ...prev,
@@ -100,40 +102,64 @@ export function useGameSocket(displayName: string) {
           break;
         }
 
-        case "Error": {
+        case "Error":
           toast.error(msg.data.msg);
           break;
-        }
-        case "Top10Scores": {
+
+        case "Top10Scores":
           setTop10Scores(
-            msg.data.scores.map(([score, name]: [number, string]) => ({
-              name,
-              score,
-            }))
+            msg.data.scores.map(([score, name]: [number, string]) => ({ name, score })),
           );
-          console.log("Top 10 scores updated:", msg.data.scores);
           break;
-        }
+
+        default:
+          console.warn("Unhandled server message type:", (msg as any).type);
       }
-    };
+    } catch (e) {
+      console.warn("Non-JSON message from server:", ev.data);
+    }
+  };
 
-    ws.onclose = () => {
-      console.log("WebSocket disconnected");
-    };
+  const onOpen = () => {
+    console.log("WebSocket connected (hook)");
+  };
+  const onClose = (ev: CloseEvent) => {
+    console.log("WebSocket disconnected (hook)", ev.code, ev.reason);
+  };
 
-    return () => {
-      ws.close();
-      wsRef.current = null;
-    };
-  }, [displayName]);
+  if (wsRef.current) {
+    wsRef.current.addEventListener("message", onMessage);
+    wsRef.current.addEventListener("open", onOpen);
+    wsRef.current.addEventListener("close", onClose);
+  } else {
+    console.warn("WebSocket not available when attaching handlers");
+  }
+
+  return () => {
+    if (wsRef.current) {
+      wsRef.current.removeEventListener("message", onMessage);
+      wsRef.current.removeEventListener("open", onOpen);
+      wsRef.current.removeEventListener("close", onClose);
+    }
+    wsRef.current = null;
+  };
+}, [displayName]);
+
 
   /** Send CreateRoom */
   function createRoom() {
-    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
-    // the owner is always ready
-    const player: Player = { player_id: myId, name: displayName, ready: true };
-    const m: WsClientMsg = { type: "CreateRoom", data: { player } };
-    wsRef.current.send(JSON.stringify(m));
+    console.log("hook: createRoom() called, wsRef:", wsRef.current);
+    if (!wsRef.current) { console.warn("hook: no wsRef.current"); return; }
+    console.log("hook: readyState", wsRef.current.readyState);
+    if (wsRef.current.readyState !== WebSocket.OPEN) {
+      console.warn("hook: websocket not open, state:", wsRef.current.readyState);
+      return;
+    }
+
+  const player: Player = { player_id: myId, name: displayName, ready: true };
+  const m: WsClientMsg = { type: "CreateRoom", data: { player } };
+  console.log("hook: sending CreateRoom", m);
+  wsRef.current.send(JSON.stringify(m));
   }
 
   /** Send JoinRoom */

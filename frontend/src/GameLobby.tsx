@@ -69,9 +69,11 @@ export default function GameLobby({
           {!roomId ? (
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <button
-                onClick={() => createRoom()}
-                className="bg-green-500 hover:bg-green-600 text-white font-bold px-8 py-3 rounded-full shadow-lg transform hover:scale-105 transition-all duration-200"
-              >
+                onClick={() => {
+                  console.log("UI: Create New Room button clicked");
+                  createRoom();
+                }}
+                className="bg-green-500 hover:bg-green-600 text-...">
                 Create New Room
               </button>
 
