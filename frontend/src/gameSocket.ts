@@ -30,7 +30,7 @@ export function useGameSocket(displayName: string) {
 
 useEffect(() => {
   const wsProtocol = window.location.protocol === "https:" ? "wss" : "ws";
-  const wsUrl = `${wsProtocol}://${window.location.host}/ws`;
+const wsUrl = `${wsProtocol}://backend-fruitbox-fsg.onrender.com/ws`;
 
   const globalAny = window as any;
 
