@@ -179,14 +179,19 @@ async fn main() {
     .with_state(state.clone());
 
 
-    // Determine the IP to bind to
-    let (bind_ip, port) = if std::env::var("RENDER").is_ok() {
-        // On Render, bind to 0.0.0.0
-        ([0, 0, 0, 0], 10000)
+    // Determine the IP to bind to and port (use PORT env when provided by platform)
+    let bind_ip = if std::env::var("PORT").is_ok() || std::env::var("RENDER").is_ok() {
+        [0, 0, 0, 0]
     } else {
-        // Locally, bind to localhost only
-        ([127, 0, 0, 1], 3123)
+        [127, 0, 0, 1]
     };
+
+    let port: u16 = std::env::var("PORT")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or_else(|| {
+            if std::env::var("RENDER").is_ok() { 10000 } else { 3123 }
+        });
 
     let addr = SocketAddr::from((bind_ip, port));
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
