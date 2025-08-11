@@ -235,7 +235,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "fruitbox-multiplayer"
+name = "fruitbox-fsg"
 version = "0.1.0"
 dependencies = [
  "anyhow",

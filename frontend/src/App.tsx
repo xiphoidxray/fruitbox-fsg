@@ -121,7 +121,7 @@ export default function App() {
                   startGame={startGame}
                   readyUp={readyUp}
                   myId={myId}
-                  ownerId={ownerId}
+                  ownerId={ownerId ?? ""}
                   isOwner={isOwner}
                 />
 

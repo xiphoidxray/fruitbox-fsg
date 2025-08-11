@@ -1,5 +1,5 @@
 import type { Player } from "./types";
-import appleImage from "./applev2.png";
+// import appleImage from "./applev2.png";
 
 interface GameLobbyProps {
   roomId: string | null;
