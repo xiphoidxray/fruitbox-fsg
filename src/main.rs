@@ -23,11 +23,14 @@ use serde::Deserialize;
 use std::fs;
 use std::path::Path;
 use anyhow::Result;
+use rand::thread_rng;
 
 #[derive(Deserialize)]
 struct Combos {
     data: Vec<[u8; 8]>,
 }
+
+const LEN: usize = 170;
 
 fn load_combos_from_dir(dir: &str) -> Result<Vec<[u8; 8]>> {
     let mut all_data = Vec::new();
