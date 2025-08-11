@@ -40,7 +40,7 @@ export default function MainTitle({ name }: MainTitleProps) {
             Fruitbox
           </h1>
           <h1 className="text-7xl font-bold text-green-500 drop-shadow-lg font-[Pacifico]">
-            Multiplayer
+            FSG
           </h1>
         </div>
         <p className="text-lg text-green-700 font-medium font-[Space Mono]">

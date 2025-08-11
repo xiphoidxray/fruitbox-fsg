@@ -20,10 +20,13 @@ use tower_http::{
 };
 use rand::prelude::*;
 use serde::Deserialize;
+use serde_json::json;
 use std::fs;
+use std::time::Instant;
 use std::path::Path;
 use anyhow::Result;
 use rand::thread_rng;
+use axum::routing::get;
 
 #[derive(Deserialize)]
 struct Combos {
@@ -102,6 +105,9 @@ struct ConnContext {
     joined_room: Option<RoomId>,
     my_player_id: Option<PlayerId>,
     room_rx: Option<broadcast::Receiver<WsServerMsg>>,
+
+    last_msg_text: Option<String>,
+    last_msg_instant: Option<Instant>,
 }
 
 impl ConnContext {
@@ -110,6 +116,8 @@ impl ConnContext {
             joined_room: None,
             my_player_id: None,
             room_rx: None,
+            last_msg_text: None,
+            last_msg_instant: None,
         }
     }
 }
@@ -160,23 +168,30 @@ async fn main() {
     let state = AppState::new_with_top_10(top_10);
 
     let app = Router::new()
-        .fallback_service(ServeDir::new(assets_dir).append_index_html_on_directories(true))
-        .route("/ws", any(ws_handler))
-        .layer(
-            TraceLayer::new_for_http()
-                .make_span_with(DefaultMakeSpan::default().include_headers(true)),
-        )
-        .with_state(state.clone());
+    // WebSocket route first so it’s not swallowed by fallback
+    .route("/ws", get(ws_handler))
+    // Serve static files after WebSocket route
+    .fallback_service(ServeDir::new(assets_dir).append_index_html_on_directories(true))
+    .layer(
+        TraceLayer::new_for_http()
+            .make_span_with(DefaultMakeSpan::default().include_headers(true)),
+    )
+    .with_state(state.clone());
 
 
-    // Determine the IP to bind to
-    let (bind_ip, port) = if std::env::var("RENDER").is_ok() {
-        // On Render, bind to 0.0.0.0
-        ([0, 0, 0, 0], 10000)
+    // Determine the IP to bind to and port (use PORT env when provided by platform)
+    let bind_ip = if std::env::var("PORT").is_ok() || std::env::var("RENDER").is_ok() {
+        [0, 0, 0, 0]
     } else {
-        // Locally, bind to localhost only
-        ([127, 0, 0, 1], 3123)
+        [127, 0, 0, 1]
     };
+
+    let port: u16 = std::env::var("PORT")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or_else(|| {
+            if std::env::var("RENDER").is_ok() { 10000 } else { 3123 }
+        });
 
     let addr = SocketAddr::from((bind_ip, port));
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
@@ -195,46 +210,44 @@ async fn main() {
 /// We also log the user‐agent and client address once per connection.
 async fn ws_handler(
     ws: WebSocketUpgrade,
-    user_agent: Option<TypedHeader<headers::UserAgent>>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     State(state): State<AppState>,
 ) -> impl IntoResponse {
-    let user_agent = if let Some(TypedHeader(ua)) = user_agent {
-        ua.to_string()
-    } else {
-        String::from("Unknown browser")
-    };
-    println!("`{user_agent}` at {addr} connected.");
-    ws.on_upgrade(move |socket| handle_socket(socket, addr, state))
+    println!("Client {addr} connecting...");
+
+    ws.on_upgrade(move |socket| handle_connection(socket, state))
 }
+
+
 
 /// Actual WebSocket state machine: one instance per connection.
-async fn handle_socket(mut socket: WebSocket, who: SocketAddr, state: AppState) {
-    // send a ping to start the conversation
-    if socket
-        .send(Message::Ping(Bytes::from_static(&[1, 2, 3])))
-        .await
-        .is_ok()
-    {
-        println!("Pinged {who}...");
-    } else {
-        println!("Could not send ping {who}! Closing.");
-        return;
+async fn handle_socket(mut socket: WebSocket, who: SocketAddr, _state: AppState) {
+    println!("New WebSocket connection from {}", who);
+
+    // Main receive loop — ignore pings/pongs because browsers handle those.
+    while let Some(Ok(msg)) = socket.recv().await {
+        match msg {
+            Message::Text(txt) => {
+                println!("Received text from {}: {}", who, txt);
+                // If you want to parse client JSON here, do:
+                // match serde_json::from_str::<WsClientMsg>(&txt) { ... }
+            }
+            Message::Binary(bin) => {
+                println!("Received binary from {}: {} bytes", who, bin.len());
+            }
+            Message::Close(frame) => {
+                println!("Client {} closed connection: {:?}", who, frame);
+                break;
+            }
+            Message::Ping(_) | Message::Pong(_) => {
+                // ignore — browser does ping/pong automatically
+            }
+        }
     }
 
-    // expect a Pong back
-    if let Some(Ok(Message::Pong(_))) = socket.recv().await {
-        println!("Received Pong from {who}. Continuing.");
-    } else {
-        println!("Did not receive Pong from {who}; closing.");
-        return;
-    }
-
-    handle_connection(socket, state).await;
-
-    // once handle_connection returns, we close this WebSocket
-    println!("WebSocket context {who} destroyed");
+    println!("Connection with {} closed.", who);
 }
+
 
 /// The “per‐connection” logic, now using a `ConnContext` to group mutable state.
 /// First: send the Top-10 snapshot to the client, then loop reading either:
@@ -294,7 +307,23 @@ async fn handle_connection(mut ws: WebSocket, state: AppState) {
             // (B) Read client→server message
             Some(Ok(msg)) = ws.recv() => {
                 if let Message::Text(txt) = msg {
-                    match serde_json::from_str::<WsClientMsg>(&txt) {
+                    let txt_string = txt.to_string();
+
+                    let now = Instant::now();
+                    if let Some(last) = &ctx.last_msg_text {
+                        if last == &txt_string {
+                            if let Some(ts) = ctx.last_msg_instant {
+                                if now.duration_since(ts).as_millis() < 800 {
+                                    println!("Skipping duplicate message: {}", txt_string);
+                                    continue; 
+                                }
+                            }
+                        }
+                    }
+                    ctx.last_msg_text = Some(txt_string.clone());
+                    ctx.last_msg_instant = Some(now);
+
+                    match serde_json::from_str::<WsClientMsg>(&txt_string) {
                         Ok(client_msg) => {
                             if let Err(err) = handle_client_msg(client_msg, &mut ctx, &state, &mut ws).await {
                                 let text = serde_json::to_string(&err).unwrap();
@@ -310,8 +339,9 @@ async fn handle_connection(mut ws: WebSocket, state: AppState) {
                             let _ = ws.send(Message::Text(text.into())).await;
                         }
                     }
+                } else {
                 }
-            },
+            }
 
             // (C) If WebSocket closed or errored, exit loop
             else => break,
@@ -337,6 +367,23 @@ async fn handle_client_msg(
     // println!("got client msg: {:?}", client_msg);
     match client_msg {
         WsClientMsg::CreateRoom { player } => {
+            if ctx.joined_room.is_some() {
+                return Err(WsServerMsg::Error {
+                    room_id: ctx.joined_room.clone(),
+                    msg: "Already in a room".to_string(),
+                });
+            }
+
+            {
+                let rooms = state.rooms.lock().await;
+                if rooms.values().any(|r| r.players.contains_key(&player.player_id)) {
+                    return Err(WsServerMsg::Error {
+                        room_id: None,
+                        msg: "Player ID already present in a room".to_string(),
+                    });
+                }
+            }
+
             // gen 4 digit number
             let room_id = format!("{:04}", rand::random::<u16>() % 10000);
 
