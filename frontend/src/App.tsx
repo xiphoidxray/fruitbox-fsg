@@ -26,6 +26,8 @@ export default function App() {
   });
   const [joinInput, setJoinInput] = useState("");
   const [showGameEndPopup, setShowGameEndPopup] = useState(false);
+  const [turn, setTurn] = useState(0);
+
 
   const {
     roomId,
@@ -332,7 +334,7 @@ export default function App() {
                 <div className="flex flex-col">
                   <Board
                     board={board}
-                    onClear={(count) => reportScore(count)}
+                    onClear={(count) => {reportScore(count, turn); setTurn(prev => prev + 1);}}
                     disabled={timer === 0}
                     rows={10}
                     cols={17}
