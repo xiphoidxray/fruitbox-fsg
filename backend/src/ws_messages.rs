@@ -56,6 +56,7 @@ pub enum WsClientMsg {
         // room_id: RoomId,
         // player_id: PlayerId,
         cleared_count: u32,
+        turn: u32,
     },
 
     ReadyUp {

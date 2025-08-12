@@ -566,9 +566,10 @@ async fn handle_client_msg(
                 room_state.board = Some(board.clone());
                 println!("Generated new board for room {}: {:?}", room_id, board);
 
-                // 4) Reset all players’ scores in this room
+                // 4) Reset all players’ scores and turns in this room
                 for pid in room_state.players.keys() {
                     room_state.scores.insert(pid.clone(), 0);
+                    *room_state.turns.entry(pid.clone()).or_insert(0) = 0;
                 }
 
                 // 5) Broadcast GameStarted to everyone in room
@@ -659,7 +660,7 @@ async fn handle_client_msg(
             Ok(())
         }
 
-        WsClientMsg::ScoreUpdate { cleared_count } => {
+        WsClientMsg::ScoreUpdate { cleared_count, turn} => {
             let (room_id, player_id) = ctx.require_room_and_player()?;
             let mut rooms = state.rooms.lock().await;
             if let Some(room_state) = rooms.get_mut(room_id) {
@@ -670,13 +671,14 @@ async fn handle_client_msg(
                     });
                 }
 
-                // 1) Update this player’s score in the room
+                // 1) Update this player’s score in the room                
                 let entry = room_state.scores.entry(player_id.clone()).or_insert(0);
                 *entry += cleared_count;
 
+                *room_state.turns.entry(player_id.clone()).or_insert(0) += 1;
                 // 2) Debug print: who scored how much
                 if let Some(player) = room_state.players.get(player_id) {
-                    println!("{} scored {}, total {}", player.name, cleared_count, entry);
+                    println!("{} turn {}, scored {}, total {}", player.name, turn, cleared_count, entry);
                 }
 
                 // 3) Broadcast updated leaderboard to all clients in room

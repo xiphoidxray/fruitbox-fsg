@@ -28,6 +28,9 @@ pub struct RoomState {
     pub board: Option<BoardData>,
     pub scores: HashMap<PlayerId, u32>,
 
+    // Track number of turns per player
+    pub turns: HashMap<PlayerId, u32>,
+
     // so we can cancel a running timer if needed (e.g. room closed).
     // For simplicity, we’ll store a handle to the tokio::JoinHandle.
     pub timer_handle: Option<tokio::task::JoinHandle<()>>,
@@ -44,7 +47,9 @@ impl RoomState {
             tx,
             board: None,
             scores: HashMap::new(),
+            turns: HashMap::new(),
             timer_handle: None,
+
         }
     }
 }

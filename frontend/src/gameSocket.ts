@@ -20,6 +20,7 @@ export function useGameSocket(displayName: string) {
   const [players, setPlayers] = useState<Player[]>([]);
   const [board, setBoard] = useState<number[]>([]);
   const [scores, setScores] = useState<Record<string, number>>({});
+  const [turn, setTurn] = useState(0);
   const [timer, setTimer] = useState(0);
   const [myId] = useState<string>(() => crypto.randomUUID());
   const [chatMessages, setChatMessages] = useState<
@@ -185,13 +186,15 @@ const wsUrl = `${wsProtocol}://backend-fruitbox-fsg.onrender.com/ws`;
   }
 
   /** Send ScoreUpdate */
-  function reportScore(cleared: number) {
-    console.log("Reporting score:", cleared);
+  function reportScore(cleared: number, turn: number) {
+    console.log("Reporting score:", cleared, "Turn:", turn);
     if (!wsRef.current || !roomId || !myId) return;
+
     const m: WsClientMsg = {
       type: "ScoreUpdate",
       data: {
         cleared_count: cleared,
+        turn: turn, 
       },
     };
     wsRef.current.send(JSON.stringify(m));

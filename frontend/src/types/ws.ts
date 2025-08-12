@@ -20,7 +20,7 @@ ready: boolean, };
 /**
  * All messages the **front end** can send to the server.
  */
-export type WsClientMsg = { "type": "CreateRoom", "data": { player: Player, } } | { "type": "JoinRoom", "data": { room_id: string, player: Player, } } | { "type": "StartGame", "data": Record<string, never> } | { "type": "ScoreUpdate", "data": { cleared_count: number, } } | { "type": "ReadyUp", "data": { ready: boolean, } } | { "type": "ChatMessage", "data": { message: string, } };
+export type WsClientMsg = { "type": "CreateRoom", "data": { player: Player, } } | { "type": "JoinRoom", "data": { room_id: string, player: Player, } } | { "type": "StartGame", "data": Record<string, never> } | { "type": "ScoreUpdate", "data": { cleared_count: number; turn: number } } | { "type": "ReadyUp", "data": { ready: boolean, } } | { "type": "ChatMessage", "data": { message: string, } };
 
 /**
  * All messages the **server** can push back to every client in a room.
