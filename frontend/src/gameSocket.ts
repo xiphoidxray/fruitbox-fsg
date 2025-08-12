@@ -79,6 +79,7 @@ const wsUrl = `${wsProtocol}://backend-fruitbox-fsg.onrender.com/ws`;
           setBoard(msg.data.board);
           setTimer(Number(msg.data.duration_secs));
           setScores({}); // keep previous behaviour: reset
+          setTurn(0);
           break;
 
         case "TimerTick":
@@ -218,6 +219,8 @@ const wsUrl = `${wsProtocol}://backend-fruitbox-fsg.onrender.com/ws`;
     scores,
     timer,
     myId,
+    turn,
+    setTurn,
     createRoom,
     joinRoom,
     readyUp, // Add readyUp to the returned object
