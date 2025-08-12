@@ -111,7 +111,7 @@ pub struct TopScoreEntry {
     pub name: String,
 }
 
-TurnsUpdate {
-    room_id: RoomId,
-    turns: HashMap<PlayerId, u32>,
+pub struct TurnsUpdate {
+    pub room_id: RoomId,
+   pub turns: HashMap<PlayerId, u32>,
 },
