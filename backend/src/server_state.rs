@@ -110,3 +110,8 @@ pub struct TopScoreEntry {
     pub score: u32,
     pub name: String,
 }
+
+TurnsUpdate {
+    room_id: RoomId,
+    turns: HashMap<PlayerId, u32>,
+},
